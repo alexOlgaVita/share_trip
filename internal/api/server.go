@@ -1,13 +1,13 @@
 package api
 
 import (
-	"job4j.ru/share-trip/internal/storage"
+	"job4j.ru/share-trip/internal/repository"
 )
 
 type Server struct {
-	Repository *storage.RepoPg
+	Repository *repository.RepoPg
 }
 
-func NewServer(repo *storage.RepoPg) *Server {
+func NewServer(repo *repository.RepoPg) *Server {
 	return &Server{Repository: repo}
 }

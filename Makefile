@@ -6,7 +6,6 @@ GOOSE_MIGRATION_DIR := migrations
 DOCKER_NAME := pg
 BINARY_NAME := sharetrip.exe
 MAIN_PKG := ./cmd/sharetrip
-MAIN_PKG0 := ./cmd
 BIN_DIR := bin
 
 # Цель по умолчанию
@@ -62,22 +61,20 @@ deps:
 
 .PHONY: migrate-status
 migrate-status:
-	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/tracker?sslmode=disable" status
+	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/sharetrip?sslmode=disable" status
 
 .PHONY: migrate-up
 migrate-up:
-	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/tracker?sslmode=disable" up
+	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/sharetrip?sslmode=disable" up
 
 .PHONY: migrate-down
 migrate-down:
-	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/tracker?sslmode=disable" down
+	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/sharetrip?sslmode=disable" down
 
 .PHONY: up
 up:
-	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_item sql
+	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_trip sql
 	docker-compose up -d
-	goose -dir ./$(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/tracker?sslmode=disable" up
-	goose -dir ./$(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/tracker?sslmode=disable" status
 
 .PHONY: down
 down:
