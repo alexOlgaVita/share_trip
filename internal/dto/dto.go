@@ -7,6 +7,18 @@ type TripRequest struct {
 	ToPoint        string `json:"toPoint"`
 	DepartureTime  string `json:"departureTime"`
 	AvailableSeats string `json:"availableSeats"`
+	Status         string `json:"status"`
+}
+
+type Trip struct {
+	ID             string
+	DriverId       string
+	FromPoint      string
+	ToPoint        string
+	DepartureTime  string
+	AvailableSeats string
+	Status         string
+	CreatedAt      string
 }
 
 type CreateTripRequest struct {
@@ -20,3 +32,48 @@ type CreateTripRequest struct {
 type CreateTripResponse struct {
 	Trip TripRequest `json:"trip"`
 }
+
+type UpdateTripRequest struct {
+	DriverId       string `json:"driverId"`
+	FromPoint      string `json:"fromPoint"`
+	ToPoint        string `json:"toPoint"`
+	DepartureTime  string `json:"departureTime"`
+	AvailableSeats string `json:"availableSeats"`
+
+	TripID   string
+	ClientID string
+	Status   string
+}
+
+type MoveTripDraftToPublishModelRequest struct {
+	ID             string
+	DriverId       string
+	FromPoint      string
+	ToPoint        string
+	DepartureTime  string
+	AvailableSeats string
+	Status         string
+	CreatedAt      string
+
+	TripID   string
+	ClientID string
+}
+
+type MoveTripDraftToPublishModelResponse struct {
+	ID             string
+	DriverId       string
+	FromPoint      string
+	ToPoint        string
+	DepartureTime  string
+	AvailableSeats string
+	Status         string
+	CreatedAt      string
+
+	TripID   string
+	ClientID string
+}
+
+const (
+	TripStatusDraft     = "draft"
+	TripStatusPublished = "published"
+)

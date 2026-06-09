@@ -44,7 +44,7 @@ func CreateTripCommand(r *repository.RepoPg, c *fiber.Ctx, req CreateTripRequest
 		return nil, domain.ErrAvailableSeatsFromPointToPointEqual
 	}
 
-	err = r.Create(c.Context(), domain.Trip{
+	err = r.Create(c.Context(), dto.Trip{
 		ID:             id,
 		DriverId:       req.DriverId,
 		FromPoint:      req.FromPoint,

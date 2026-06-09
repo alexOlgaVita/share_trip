@@ -74,6 +74,7 @@ migrate-down:
 .PHONY: up
 up:
 	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_trip sql
+	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_outbox_event.sql
 	docker-compose up -d
 
 .PHONY: down

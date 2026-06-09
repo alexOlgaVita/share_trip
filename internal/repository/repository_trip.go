@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	shareTrip "job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/dto"
 )
 
 type RepoPg struct {
@@ -16,7 +17,7 @@ func NewRepoPg(pool *pgxpool.Pool) *RepoPg {
 	return &RepoPg{pool: pool}
 }
 
-func (r *RepoPg) Create(ctx context.Context, it shareTrip.Trip) error {
+func (r *RepoPg) Create(ctx context.Context, it dto.Trip) error {
 	// запись в основную таблицу
 	_, err := r.pool.Exec(
 		ctx,
@@ -40,16 +41,42 @@ func (r *RepoPg) Create(ctx context.Context, it shareTrip.Trip) error {
 	return nil
 }
 
-func (r *RepoPg) List(ctx context.Context) ([]shareTrip.Trip, error) {
+func (r *RepoPg) CreateNew(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+	// запись в основную таблицу
+	_, err := r.pool.Exec(
+		ctx,
+		`insert into trips(id, driver_id, from_point, to_point, departure_time, seats, status) values($1, $2, $3, $4, $5, $6, $7)`,
+		it.ID, it.DriverId, it.FromPoint, it.ToPoint, it.DepartureTime, it.AvailableSeats, it.Status,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("r.pool.Exec: %w", err)
+	}
+	// запись в историческую таблицу
+	id := uuid.New().String()
+	_, err = r.pool.Exec(
+		ctx,
+		`insert into trip_history(id, trip_id, to_status) values($1, $2, $3)`,
+		id, it.ID, it.Status,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("r.pool.Exec: %w", err)
+	}
+
+	return &it, nil
+}
+
+//
+
+func (r *RepoPg) List(ctx context.Context) ([]dto.Trip, error) {
 	rows, err := r.pool.Query(ctx, `select id, name from trips`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var trips []shareTrip.Trip
+	var trips []dto.Trip
 	for rows.Next() {
-		var item shareTrip.Trip
+		var item dto.Trip
 		if err := rows.Scan(&item.ID, &item.DriverId, &item.FromPoint, &item.ToPoint, &item.DepartureTime, &item.AvailableSeats); err != nil {
 			return nil, err
 		}
@@ -63,13 +90,13 @@ func (r *RepoPg) List(ctx context.Context) ([]shareTrip.Trip, error) {
 	return trips, nil
 }
 
-func (r *RepoPg) Get(ctx context.Context, tripId string) (shareTrip.Trip, error) {
-	var it shareTrip.Trip
+func (r *RepoPg) Get(ctx context.Context, tripId string) (dto.Trip, error) {
+	var it dto.Trip
 	err := r.pool.QueryRow(
 		ctx,
-		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats from trips where id = $1`,
+		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status from trips where id = $1`,
 		tripId,
-	).Scan(&it.ID, &it.DriverId, &it.FromPoint, &it.ToPoint, &it.DepartureTime, &it.AvailableSeats)
+	).Scan(&it.ID, &it.DriverId, &it.FromPoint, &it.ToPoint, &it.DepartureTime, &it.AvailableSeats, &it.Status)
 
 	return it, err
 }
@@ -80,6 +107,23 @@ func (r *RepoPg) Update(ctx context.Context, name string, newName string) error 
 		"UPDATE trips SET name = $2 WHERE name = $1",
 		name, newName,
 	)
+	if err != nil {
+		return fmt.Errorf("r.pool.Exec: %w", err)
+	}
+
+	return nil
+}
+
+func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStatus string, newStatus string) error {
+	_, err := tx.Exec(ctx, "UPDATE trips SET status = $2 WHERE id = $1", id, newStatus)
+	if err != nil {
+		return fmt.Errorf("r.pool.Exec: %w", err)
+	}
+	// отразить смену статуса в исторической таблице
+	idHist := uuid.New().String()
+	_, err = tx.Exec(ctx, "INSERT INTO trip_history(id, trip_id, from_status, to_status) values($1, $2, $3, $4)",
+		idHist, id, oldStatus, newStatus)
+
 	if err != nil {
 		return fmt.Errorf("r.pool.Exec: %w", err)
 	}
@@ -113,4 +157,37 @@ func (r *RepoPg) GetCount(ctx context.Context) (string, error) {
 func (r *RepoPg) DoPing(ctx context.Context) error {
 	err := r.pool.Ping(ctx)
 	return err
+}
+func (r *RepoPg) GetForUpdateByID(
+	ctx context.Context,
+	tx pgx.Tx,
+	id string,
+) (dto.Trip, error) {
+	var trip dto.Trip
+	err := tx.QueryRow(ctx, "SELECT "+
+		"id, "+
+		"driver_id, "+
+		"from_point, "+
+		"to_point, "+
+		"COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), '') AS departure_time, "+
+		"seats, "+
+		"status, "+
+		"COALESCE(to_char(created_at, 'MM-DD-YYYY HH24:MI'), '') AS created_at "+
+		"FROM trips WHERE id = $1 FOR UPDATE", id).Scan(
+		&trip.ID,
+		&trip.DriverId,
+		&trip.FromPoint,
+		&trip.ToPoint,
+		&trip.DepartureTime,
+		&trip.AvailableSeats,
+		&trip.Status,
+		&trip.CreatedAt,
+	)
+	if err != nil {
+		return dto.Trip{}, fmt.Errorf(
+			"r.pool.QueryRow get trip by id for update: %w", err,
+		)
+	}
+
+	return trip, nil
 }

@@ -28,6 +28,7 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 		ToPoint:        trip.ToPoint,
 		DepartureTime:  trip.DepartureTime,
 		AvailableSeats: trip.AvailableSeats,
+		Status:         trip.Status,
 	}
 
 	return c.Status(fiber.StatusOK).JSON(GetTripResponse{Trip: res})

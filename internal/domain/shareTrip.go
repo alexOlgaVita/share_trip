@@ -1,33 +1,18 @@
 package domain
 
 import (
-	"fmt"
+	"job4j.ru/share-trip/internal/dto"
 )
 
-type Trip struct {
-	ID             string
-	DriverId       string
-	FromPoint      string
-	ToPoint        string
-	DepartureTime  string
-	AvailableSeats string
-}
-
-func (t Trip) toString() string {
-
-	return fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s",
-		t.ID, t.DriverId, t.FromPoint, t.ToPoint, t.DepartureTime, t.AvailableSeats)
-}
-
 type ShareTrip struct {
-	Trips []Trip
+	Trips []dto.Trip
 }
 
 func NewShareTrip() *ShareTrip {
 	return &ShareTrip{}
 }
 
-func (sht *ShareTrip) AddTrip(trip Trip) error {
+func (sht *ShareTrip) AddTrip(trip dto.Trip) error {
 	_, ok := sht.indexOf(trip.ID)
 	if ok {
 		return ErrAlreadyExists
@@ -36,7 +21,7 @@ func (sht *ShareTrip) AddTrip(trip Trip) error {
 	return nil
 }
 
-func (sht *ShareTrip) GetTrip() []Trip {
+func (sht *ShareTrip) GetTrip() []dto.Trip {
 	return sht.Trips
 }
 

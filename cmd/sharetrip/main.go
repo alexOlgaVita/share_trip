@@ -5,7 +5,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/api"
+	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/repository"
+	"job4j.ru/share-trip/internal/service"
 	"log"
 )
 
@@ -30,7 +32,12 @@ func main() {
 	repo := repository.NewRepoPg(pool)
 
 	server := api.NewServer(repo)
-
+	server.TripService = &service.TripService{
+		Pool: pool,
+		TripUsecase: &domain.TripUsecase{
+			TripRepo: repo,
+		},
+	}
 	app := fiber.New()
 	server.Route(app.Group("/api"))
 
@@ -38,4 +45,5 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 }
