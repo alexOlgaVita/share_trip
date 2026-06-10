@@ -65,8 +65,6 @@ func (r *RepoPg) CreateNew(ctx context.Context, it dto.Trip) (*dto.Trip, error) 
 	return &it, nil
 }
 
-//
-
 func (r *RepoPg) List(ctx context.Context) ([]dto.Trip, error) {
 	rows, err := r.pool.Query(ctx, `select id, name from trips`)
 	if err != nil {
@@ -128,6 +126,17 @@ func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStat
 		return fmt.Errorf("r.pool.Exec: %w", err)
 	}
 
+	// добавить сообщение в таблицу уведомлений
+	idEvent := uuid.New().String()
+	_, err = tx.Exec(ctx, "INSERT INTO outbox_event(id, event_name, aggregate_id, payload) values($1, $2, $3, $4)",
+		idEvent, dto.TripEventPublished, id, dto.SentNotificationTripPublishRequest{
+			TripID: id,
+		})
+
+	if err != nil {
+		return fmt.Errorf("r.pool.Exec: %w", err)
+	}
+
 	return nil
 }
 
@@ -158,6 +167,7 @@ func (r *RepoPg) DoPing(ctx context.Context) error {
 	err := r.pool.Ping(ctx)
 	return err
 }
+
 func (r *RepoPg) GetForUpdateByID(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -190,4 +200,27 @@ func (r *RepoPg) GetForUpdateByID(
 	}
 
 	return trip, nil
+}
+
+func (r *RepoPg) EventList(ctx context.Context, tripId string) ([]dto.TripEvent, error) {
+	rows, err := r.pool.Query(ctx, `select id, event_name from outbox_event  WHERE aggregate_id = $1`, tripId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var trips []dto.TripEvent
+	for rows.Next() {
+		var item dto.TripEvent
+		if err := rows.Scan(&item.ID, &item.Name); err != nil {
+			return nil, err
+		}
+		trips = append(trips, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return trips, nil
 }

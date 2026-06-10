@@ -73,7 +73,17 @@ type MoveTripDraftToPublishModelResponse struct {
 	ClientID string
 }
 
+type SentNotificationTripPublishRequest struct {
+	TripID string `json:"tripID"`
+}
+
 const (
 	TripStatusDraft     = "draft"
 	TripStatusPublished = "published"
+	TripEventPublished  = "trip_published"
 )
+
+type TripEvent struct {
+	ID   string
+	Name string
+}
