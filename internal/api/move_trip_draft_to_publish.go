@@ -37,5 +37,5 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusInternalServerError, "internal server error^ empty result")
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(resp)
+	return c.Status(fiber.StatusOK).JSON(resp)
 }
