@@ -19,7 +19,7 @@ func (u *TripUsecase) CreateTrip(
 	req dto.CreateTripRequest,
 ) (*dto.Trip, error) {
 	id := uuid.NewString()
-	trip, err := u.TripRepo.CreateNew(ctx, dto.Trip{
+	trip, err := u.TripRepo.Create(ctx, dto.Trip{
 		ID:             id,
 		DriverId:       req.DriverId,
 		FromPoint:      req.FromPoint,

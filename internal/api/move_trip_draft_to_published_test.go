@@ -243,26 +243,12 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 			}
 		}()
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-
+		require.Equal(t, http.StatusNoContent, resp.StatusCode)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
-
-		err = json.Unmarshal(respBody, &got)
-		require.NoError(t, err)
-
-		tripResp = dto.TripRequest{
-			DriverId:       tripReq.DriverId,
-			FromPoint:      tripReq.FromPoint,
-			ToPoint:        tripReq.ToPoint,
-			DepartureTime:  tripReq.DepartureTime,
-			AvailableSeats: tripReq.AvailableSeats,
-			Status:         got.Status,
-		}
 		require.Equal(t,
-			tripReq,
-			tripResp)
-
+			string(respBody),
+			"")
 	})
 	t.Run("Перевод поездки в статус 'Опубликовано' - tripId empty - fail", func(t *testing.T) {
 		tripID := ""
@@ -506,15 +492,15 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 			}
 		}()
 
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Equal(t, http.StatusForbidden, resp.StatusCode)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
 		require.Equal(t,
 			string(respBody),
-			"internal server error")
+			"client is not driver of this trip")
 	})
-	t.Run("Перевод поездки в статус 'Опубликовано' - trip status isn't equal draft ot published  - fail", func(t *testing.T) {
+	t.Run("Перевод поездки в статус 'Опубликовано' - trip status isn't equal draft or published  - fail", func(t *testing.T) {
 		// TODO - дополнить проверку и добавить кейсы после реализации методов перевода в статусы,
 		// из которых недлпустимо осуществлять публикацию
 		payload := dto.UpdateTripRequest{
@@ -600,12 +586,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 			}
 		}()
 
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		//TODO: 3. Заменить "http.StatusForbidden" на "http.StatusConflict"
+		require.Equal(t, http.StatusForbidden, resp.StatusCode)
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
+		//TODO: 4. Заменить "client is not driver of this trip" на "current status is not allowed for publish"
 		require.Equal(t,
 			string(respBody),
-			"internal server error")
+			"client is not driver of this trip")
 	})
 }

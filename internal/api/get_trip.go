@@ -1,8 +1,10 @@
 package api
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"job4j.ru/share-trip/internal/domain"
 )
 
 type GetTripResponse struct {
@@ -15,9 +17,17 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "tripId is required")
 	}
 
-	trip, err := s.Repository.Get(c.Context(), tripId)
+	trip, err := s.TripService.GetTrip(c.Context(), tripId)
+
 	if err != nil {
-		log.Errorw("s.Repository.Get", err)
+		if errors.Is(err, domain.ErrTripNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, "trip is not found")
+		}
+		log.Errorw(
+			"get trip failed",
+			"error", err,
+			"trip_id", tripId,
+		)
 		return fiber.NewError(fiber.StatusInternalServerError, "internal server error")
 	}
 

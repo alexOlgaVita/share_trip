@@ -16,7 +16,7 @@ type TripService struct {
 
 func (s *TripService) CreateTrip(
 	ctx context.Context,
-	req CreateTripRequest,
+	req dto.CreateTripRequest,
 ) (*dto.Trip, error) {
 	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*dto.Trip, error) {
 		resp, err := s.TripUsecase.CreateTrip(ctx, tx, dto.CreateTripRequest{

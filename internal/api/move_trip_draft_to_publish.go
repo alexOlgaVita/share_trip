@@ -1,8 +1,10 @@
 package api
 
 import (
+	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 )
 
@@ -27,14 +29,24 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 		TripID:   req.TripID,
 		ClientID: req.ClientID,
 	})
+
 	if err != nil {
+
+		if errors.Is(err, domain.ErrTripNotFound) {
+			return fiber.NewError(fiber.StatusNotFound, "trip is not found")
+		}
+		if errors.Is(err, domain.ErrClientNotDriver) {
+			return fiber.NewError(fiber.StatusForbidden, "client is not driver of this trip")
+		}
+		if errors.Is(err, domain.ErrNotAllowedCurrentStatusToPublish) {
+			return fiber.NewError(fiber.StatusConflict, "current status is not allowed for publish")
+		}
+		if errors.Is(err, domain.ErrStatusIsPublishedAlready) {
+			return fiber.NewError(fiber.StatusNoContent, "trip's status is published already")
+		}
+
 		log.Errorw("s.TripService.MoveTripDraftToPublish", err)
 		return fiber.NewError(fiber.StatusInternalServerError, "internal server error")
-	}
-
-	if err == nil && resp == nil {
-		log.Errorw("s.TripService.MoveTripDraftToPublish", err)
-		return fiber.NewError(fiber.StatusInternalServerError, "internal server error^ empty result")
 	}
 
 	return c.Status(fiber.StatusOK).JSON(resp)

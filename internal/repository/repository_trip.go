@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -17,31 +18,7 @@ func NewRepoPg(pool *pgxpool.Pool) *RepoPg {
 	return &RepoPg{pool: pool}
 }
 
-func (r *RepoPg) Create(ctx context.Context, it dto.Trip) error {
-	// запись в основную таблицу
-	_, err := r.pool.Exec(
-		ctx,
-		`insert into trips(id, driver_id, from_point, to_point, departure_time, seats) values($1, $2, $3, $4, $5, $6)`,
-		it.ID, it.DriverId, it.FromPoint, it.ToPoint, it.DepartureTime, it.AvailableSeats,
-	)
-	if err != nil {
-		return fmt.Errorf("r.pool.Exec: %w", err)
-	}
-	// запись в историческую таблицу
-	id := uuid.New().String()
-	_, err = r.pool.Exec(
-		ctx,
-		`insert into trip_history(id, trip_id, to_status) values($1, $2, $3)`,
-		id, it.ID, "draft",
-	)
-	if err != nil {
-		return fmt.Errorf("r.pool.Exec: %w", err)
-	}
-
-	return nil
-}
-
-func (r *RepoPg) CreateNew(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
 	// запись в основную таблицу
 	_, err := r.pool.Exec(
 		ctx,
@@ -97,6 +74,36 @@ func (r *RepoPg) Get(ctx context.Context, tripId string) (dto.Trip, error) {
 	).Scan(&it.ID, &it.DriverId, &it.FromPoint, &it.ToPoint, &it.DepartureTime, &it.AvailableSeats, &it.Status)
 
 	return it, err
+}
+
+func (r *RepoPg) GetByID(
+	ctx context.Context,
+	tx pgx.Tx,
+	id string,
+) (*dto.Trip, error) {
+	trip := &dto.Trip{}
+
+	err := tx.QueryRow(
+		ctx,
+		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status, created_at from trips where id = $1 `,
+		id).Scan(
+		&trip.ID,
+		&trip.DriverId,
+		&trip.FromPoint,
+		&trip.ToPoint,
+		&trip.DepartureTime,
+		&trip.AvailableSeats,
+		&trip.Status,
+		&trip.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTripNotFound
+		}
+		return nil, fmt.Errorf("query trip by id %s: %w", id, err)
+	}
+
+	return trip, nil
 }
 
 func (r *RepoPg) Update(ctx context.Context, name string, newName string) error {
@@ -172,8 +179,8 @@ func (r *RepoPg) GetForUpdateByID(
 	ctx context.Context,
 	tx pgx.Tx,
 	id string,
-) (dto.Trip, error) {
-	var trip dto.Trip
+) (*dto.Trip, error) {
+	trip := &dto.Trip{}
 	err := tx.QueryRow(ctx, "SELECT "+
 		"id, "+
 		"driver_id, "+
@@ -194,9 +201,10 @@ func (r *RepoPg) GetForUpdateByID(
 		&trip.CreatedAt,
 	)
 	if err != nil {
-		return dto.Trip{}, fmt.Errorf(
-			"r.pool.QueryRow get trip by id for update: %w", err,
-		)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTripNotFound
+		}
+		return nil, fmt.Errorf("query trip by id %s: %w", id, err)
 	}
 
 	return trip, nil

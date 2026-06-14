@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 )
 
@@ -17,10 +19,15 @@ func (s *TripService) MoveTripDraftToPublish(
 			ClientID: req.ClientID,
 		})
 		if err != nil {
+			if errors.Is(err, domain.ErrTripNotFound) ||
+				errors.Is(err, domain.ErrClientNotDriver) ||
+				errors.Is(err, domain.ErrNotAllowedCurrentStatusToPublish) ||
+				errors.Is(err, domain.ErrStatusIsPublishedAlready) {
+				return nil, err
+			}
 			return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
 		}
 		return resp, nil
-
 	})
 
 	if err != nil {

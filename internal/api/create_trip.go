@@ -4,7 +4,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"job4j.ru/share-trip/internal/dto"
-	"job4j.ru/share-trip/internal/service"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type TripRequest dto.TripRequest
@@ -34,37 +36,27 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	if req.AvailableSeats == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "availableSeats is required")
 	}
-
-	res, error := service.CreateTripCommand(s.Repository, c, service.CreateTripRequest(req))
-	if error != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "internal server error")
+	now := time.Now()
+	templateDate := "2006-01-02 15:04:05"
+	departureTime, err := time.Parse(templateDate, req.DepartureTime)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "date format error")
 	}
-	return c.Status(fiber.StatusCreated).JSON(CreateTripResponse{Trip: dto.TripRequest(*res)})
-}
-
-func (s *Server) CreateTripNew(c *fiber.Ctx) error {
-	var req CreateTripRequest
-	if err := c.BodyParser(&req); err != nil {
-		return fiber.NewError(fiber.StatusBadRequest, "invalid JSON body")
+	if now.After(departureTime) {
+		return fiber.NewError(fiber.StatusBadRequest, "date is expired")
 	}
-
-	if req.DriverId == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "driverId is required")
+	availableSeats, err := strconv.Atoi(req.AvailableSeats)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "attribute 'availableSeats' doesn't match to integer type")
 	}
-	if req.FromPoint == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "fromPoint is required")
+	if availableSeats < 1 {
+		return fiber.NewError(fiber.StatusBadRequest, "attribute 'availableSeats' has value less 1")
 	}
-	if req.ToPoint == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "toPoint is required")
-	}
-	if req.DepartureTime == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "departureTime is required")
-	}
-	if req.AvailableSeats == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "availableSeats is required")
+	if strings.EqualFold(strings.Trim(req.FromPoint, " "), strings.Trim(req.ToPoint, " ")) {
+		return fiber.NewError(fiber.StatusBadRequest, "fromPoint and toPoint have the same value")
 	}
 
-	var resp, err = s.TripService.CreateTrip(c.Context(), service.CreateTripRequest{
+	resp, err := s.TripService.CreateTrip(c.Context(), dto.CreateTripRequest{
 		DriverId:       req.DriverId,
 		FromPoint:      req.FromPoint,
 		ToPoint:        req.ToPoint,
