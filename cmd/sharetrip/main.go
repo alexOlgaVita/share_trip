@@ -5,7 +5,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/api"
+	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/observability/middleware"
 	"job4j.ru/share-trip/internal/repository"
 	"job4j.ru/share-trip/internal/service"
 	"log"
@@ -39,11 +41,20 @@ func main() {
 		},
 	}
 	app := fiber.New()
+
+	logger, logFile, err := appl.NewLogger()
+
+	if err != nil {
+		panic(err)
+	}
+	defer logFile.Close()
+
+	app.Use(middleware.Correlation(logger))
+
 	server.Route(app.Group("/api"))
 
 	err = app.Listen(":8080")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }

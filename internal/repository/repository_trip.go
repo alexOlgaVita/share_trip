@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"job4j.ru/share-trip/internal/dto"
+	"job4j.ru/share-trip/internal/observability/logctx"
+	"log/slog"
 )
 
 type RepoPg struct {
@@ -19,6 +21,16 @@ func NewRepoPg(pool *pgxpool.Pool) *RepoPg {
 }
 
 func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+	logger := logctx.Logger(ctx).With(
+		slog.String("layer", "repository"),
+		slog.String("repository", "TripRepository"),
+		slog.String("operation", "Create"),
+		slog.String("trip_id", it.ID),
+		slog.String("driverId", it.DriverId),
+	)
+
+	logger.Info("insert trip started")
+
 	// запись в основную таблицу
 	_, err := r.pool.Exec(
 		ctx,
@@ -36,9 +48,14 @@ func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
 		id, it.ID, it.Status,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("r.pool.Exec: %w", err)
+		logger.Error(
+			"insert trip failed",
+			slog.Any("error", err),
+		)
+		return nil, fmt.Errorf("tx.Exec create trip: %w", err)
 	}
 
+	logger.Info("insert trip completed")
 	return &it, nil
 }
 
@@ -85,7 +102,7 @@ func (r *RepoPg) GetByID(
 
 	err := tx.QueryRow(
 		ctx,
-		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status, created_at from trips where id = $1 `,
+		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status, COALESCE(to_char(created_at, 'MM-DD-YYYY HH24:MI'), '') from trips where id = $1 `,
 		id).Scan(
 		&trip.ID,
 		&trip.DriverId,
