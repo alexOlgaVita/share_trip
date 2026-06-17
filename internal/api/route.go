@@ -1,7 +1,9 @@
 package api
 
 import (
+	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func (s *Server) Route(route fiber.Router) {
@@ -10,4 +12,5 @@ func (s *Server) Route(route fiber.Router) {
 	route.Put("/trip/", s.MoveTripDraftToPublish)
 	route.Get("/trip/:tripId", s.GetTrip)
 	route.Get("/trip/events/:tripId", s.GetTripEvents)
+	route.Get("/metrics", adaptor.HTTPHandler(promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{})))
 }

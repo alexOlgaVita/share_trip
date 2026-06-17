@@ -8,18 +8,45 @@ import (
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
+	"job4j.ru/share-trip/internal/observability/metrics"
 	"log/slog"
+	"time"
 )
 
 type TripService struct {
+	logger      *slog.Logger
+	metrics     *metrics.Metrics
 	Pool        *pgxpool.Pool
 	TripUsecase *domain.TripUsecase
+}
+
+func NewTripService(
+	logger *slog.Logger,
+	metrics *metrics.Metrics,
+	Pool *pgxpool.Pool,
+	TripUsecase *domain.TripUsecase,
+) *TripService {
+	return &TripService{
+		logger:      logger,
+		metrics:     metrics,
+		Pool:        Pool,
+		TripUsecase: TripUsecase,
+	}
 }
 
 func (s *TripService) CreateTrip(
 	ctx context.Context,
 	req dto.CreateTripRequest,
 ) (*dto.Trip, error) {
+	started := time.Now()
+	result := "success"
+
+	defer func() {
+		s.metrics.TripCreateTotal.WithLabelValues(result).Inc()
+		s.metrics.TripCreateDuration.WithLabelValues(result).
+			Observe(time.Since(started).Seconds())
+	}()
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("service", "TripService"),
 		slog.String("operation", "CreateTrip"),

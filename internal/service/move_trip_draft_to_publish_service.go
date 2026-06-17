@@ -7,12 +7,22 @@ import (
 	"github.com/jackc/pgx/v5"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
+	"time"
 )
 
 func (s *TripService) MoveTripDraftToPublish(
 	ctx context.Context,
 	req dto.UpdateTripRequest,
 ) (*dto.Trip, error) {
+	started := time.Now()
+	result := "success"
+
+	defer func() {
+		s.metrics.TripPublishTotal.WithLabelValues(result).Inc()
+		s.metrics.TripPublishDuration.WithLabelValues(result).
+			Observe(time.Since(started).Seconds())
+	}()
+
 	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*dto.Trip, error) {
 		resp, err := s.TripUsecase.MoveTripDraftToPublish(ctx, tx, dto.UpdateTripRequest{
 			TripID:   req.TripID,

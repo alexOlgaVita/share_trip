@@ -9,18 +9,37 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
+	"job4j.ru/share-trip/internal/observability/metrics"
 	"log/slog"
+	"time"
 )
 
 type RepoPg struct {
-	pool *pgxpool.Pool
+	metrics *metrics.Metrics
+	pool    *pgxpool.Pool
 }
 
-func NewRepoPg(pool *pgxpool.Pool) *RepoPg {
-	return &RepoPg{pool: pool}
+func NewRepoPg(metrics *metrics.Metrics, pool *pgxpool.Pool) *RepoPg {
+
+	return &RepoPg{metrics: metrics, pool: pool}
 }
 
 func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+	started := time.Now()
+	result := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"trip_create",
+			result,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"trip_create",
+			result,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("layer", "repository"),
 		slog.String("repository", "TripRepository"),
@@ -98,6 +117,21 @@ func (r *RepoPg) GetByID(
 	tx pgx.Tx,
 	id string,
 ) (*dto.Trip, error) {
+	started := time.Now()
+	result := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"trip_getByID",
+			result,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"trip_getByID",
+			result,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	trip := &dto.Trip{}
 
 	err := tx.QueryRow(
@@ -137,6 +171,21 @@ func (r *RepoPg) Update(ctx context.Context, name string, newName string) error 
 }
 
 func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStatus string, newStatus string) error {
+	started := time.Now()
+	result := "success"
+
+	defer func() {
+		r.metrics.RepositoryQueryTotal.WithLabelValues(
+			"trip_updateStatus",
+			result,
+		).Inc()
+
+		r.metrics.RepositoryQueryDuration.WithLabelValues(
+			"trip_updateStatus",
+			result,
+		).Observe(time.Since(started).Seconds())
+	}()
+
 	_, err := tx.Exec(ctx, "UPDATE trips SET status = $2 WHERE id = $1", id, newStatus)
 	if err != nil {
 		return fmt.Errorf("r.pool.Exec: %w", err)

@@ -3,7 +3,11 @@ package api_test
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/observability/metrics"
 	"job4j.ru/share-trip/internal/repository"
 	"log"
 	"os"
@@ -72,18 +76,24 @@ func TestMain(m *testing.M) {
 		log.Fatalf("create pgx pool: %v", err)
 	}
 
-	//tripService := service.NewTripService(testPool)
-	//server := api.NewServer(tripService)
+	logger, logFile, err := appl.NewLogger()
 
-	//
-	repo := repository.NewRepoPg(testPool)
-	server := api.NewServer(repo)
-	server.TripService = &service.TripService{
-		Pool: testPool,
-		TripUsecase: &domain.TripUsecase{
-			TripRepo: repo,
-		},
+	if err != nil {
+		panic(err)
 	}
+
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close log file: %v\n", err)
+		}
+	}()
+	registry := prometheus.NewRegistry()
+	metrics := metrics.New(registry)
+	repo := repository.NewRepoPg(metrics, testPool)
+	srv := service.NewTripService(logger, metrics, testPool, &domain.TripUsecase{
+		TripRepo: repo,
+	})
+	server := api.NewServer(registry, repo, srv)
 	//
 
 	testApp = fiber.New()

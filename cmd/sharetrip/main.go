@@ -2,18 +2,38 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
+	"github.com/prometheus/client_golang/prometheus"
 	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/observability/metrics"
 	"job4j.ru/share-trip/internal/observability/middleware"
 	"job4j.ru/share-trip/internal/repository"
 	"job4j.ru/share-trip/internal/service"
 	"log"
+	"os"
 )
 
 func main() {
+	app := fiber.New()
+
+	logger, logFile, err := appl.NewLogger()
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err := logFile.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close log file: %v\n", err)
+		}
+	}()
+
+	app.Use(middleware.Correlation(logger))
+
 	ctx := context.Background()
 
 	cfg := repository.Config{
@@ -31,27 +51,18 @@ func main() {
 	}
 	defer pool.Close()
 
-	repo := repository.NewRepoPg(pool)
+	registry := prometheus.NewRegistry()
+	m := metrics.New(registry)
+	repo := repository.NewRepoPg(m, pool)
+	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
+		TripRepo: repo,
+	})
 
-	server := api.NewServer(repo)
-	server.TripService = &service.TripService{
-		Pool: pool,
-		TripUsecase: &domain.TripUsecase{
-			TripRepo: repo,
-		},
-	}
-	app := fiber.New()
+	server := api.NewServer(registry, repo, srv)
+	app.Use(api.NewHTTPMetricsMiddleware(m))
 
-	logger, logFile, err := appl.NewLogger()
-
-	if err != nil {
-		panic(err)
-	}
-	defer logFile.Close()
-
-	app.Use(middleware.Correlation(logger))
-
-	server.Route(app.Group("/api"))
+	//server.Route(app.Group("/api"))
+	server.Route(app.Group("/"))
 
 	err = app.Listen(":8080")
 	if err != nil {
