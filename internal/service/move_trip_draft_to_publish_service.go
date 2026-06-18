@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 	"time"
@@ -14,6 +15,9 @@ func (s *TripService) MoveTripDraftToPublish(
 	ctx context.Context,
 	req dto.UpdateTripRequest,
 ) (*dto.Trip, error) {
+	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.MoveTripDraftToPublish")
+	defer span.End()
+
 	started := time.Now()
 	result := "success"
 

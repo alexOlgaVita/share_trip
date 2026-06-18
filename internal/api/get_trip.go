@@ -4,6 +4,8 @@ import (
 	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"job4j.ru/share-trip/internal/domain"
 )
 
@@ -12,12 +14,24 @@ type GetTripResponse struct {
 }
 
 func (s *Server) GetTrip(c *fiber.Ctx) error {
+	tracer := otel.Tracer("trip-api")
+
+	ctx, span := tracer.Start(c.UserContext(), "GetTripHandler")
+	defer span.End()
+
+	c.Set("trace-id", span.SpanContext().TraceID().String())
+
 	tripId := c.Params("tripId")
+
+	span.SetAttributes(
+		attribute.String("trip_id", tripId),
+	)
+
 	if tripId == "" {
 		return fiber.NewError(fiber.StatusBadRequest, "tripId is required")
 	}
 
-	trip, err := s.TripService.GetTrip(c.Context(), tripId)
+	trip, err := s.TripService.GetTrip(ctx, tripId)
 
 	if err != nil {
 		if errors.Is(err, domain.ErrTripNotFound) {

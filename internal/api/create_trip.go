@@ -3,6 +3,8 @@ package api
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"log/slog"
@@ -18,7 +20,11 @@ type CreateTripRequest dto.CreateTripRequest
 type CreateTripResponse dto.CreateTripResponse
 
 func (s *Server) CreateTrip(c *fiber.Ctx) error {
-	ctx := c.UserContext()
+	tracer := otel.Tracer("trip-api")
+	ctx, span := tracer.Start(c.UserContext(), "CreateTripHandler")
+	defer span.End()
+
+	c.Set("trace-id", span.SpanContext().TraceID().String())
 
 	logger := logctx.Logger(ctx).With(
 		slog.String("server", "TripServer"),
@@ -33,6 +39,14 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		)
 		return fiber.NewError(fiber.StatusBadRequest, "invalid JSON body")
 	}
+
+	span.SetAttributes(
+		attribute.String("driver_id", req.DriverId),
+		attribute.String("departure_time", req.DepartureTime),
+		attribute.String("to_point", req.ToPoint),
+		attribute.String("from_point", req.FromPoint),
+		attribute.String("available_seats", req.AvailableSeats),
+	)
 
 	if req.DriverId == "" {
 		logger.Warn("create trip failed: driverId is required")
@@ -118,5 +132,6 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		"create trip completed",
 		slog.String("trip_id", resp.ID),
 	)
+
 	return c.Status(fiber.StatusCreated).JSON(resp)
 }

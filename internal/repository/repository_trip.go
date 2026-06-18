@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/observability/metrics"
@@ -25,6 +26,11 @@ func NewRepoPg(metrics *metrics.Metrics, pool *pgxpool.Pool) *RepoPg {
 }
 
 func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.Create")
+	defer span.End()
+
 	started := time.Now()
 	result := "success"
 
@@ -117,6 +123,11 @@ func (r *RepoPg) GetByID(
 	tx pgx.Tx,
 	id string,
 ) (*dto.Trip, error) {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.GetByID")
+	defer span.End()
+
 	started := time.Now()
 	result := "success"
 
@@ -171,6 +182,11 @@ func (r *RepoPg) Update(ctx context.Context, name string, newName string) error 
 }
 
 func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStatus string, newStatus string) error {
+	tracer := otel.Tracer("TripRepository")
+
+	ctx, span := tracer.Start(ctx, "TripRepository.UpdateStatus")
+	defer span.End()
+
 	started := time.Now()
 	result := "success"
 

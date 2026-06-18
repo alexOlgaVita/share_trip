@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/dto"
 )
 
@@ -11,6 +12,10 @@ func (u *TripUsecase) MoveTripDraftToPublish(
 	tx pgx.Tx,
 	req dto.UpdateTripRequest,
 ) (*dto.Trip, error) {
+	tracer := otel.Tracer("TripUsecase")
+
+	ctx, span := tracer.Start(ctx, "TripUsecase.MoveTripDraftToPublish")
+	defer span.End()
 
 	trip, err := u.TripRepo.GetForUpdateByID(ctx, tx, req.TripID)
 	if err != nil {

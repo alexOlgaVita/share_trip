@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
@@ -38,6 +39,9 @@ func (s *TripService) CreateTrip(
 	ctx context.Context,
 	req dto.CreateTripRequest,
 ) (*dto.Trip, error) {
+	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.CreateTrip")
+	defer span.End()
+
 	started := time.Now()
 	result := "success"
 

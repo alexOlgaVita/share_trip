@@ -4,6 +4,8 @@ import (
 	"errors"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/dto"
 )
@@ -13,6 +15,12 @@ type MoveTripDraftToPublishModelRequest dto.MoveTripDraftToPublishModelRequest
 type MoveTripDraftToPublishModelResponse dto.MoveTripDraftToPublishModelResponse
 
 func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
+	tracer := otel.Tracer("trip-api")
+	ctx, span := tracer.Start(c.UserContext(), "MoveTripDraftToPublishTripHandler")
+	defer span.End()
+
+	c.Set("trace-id", span.SpanContext().TraceID().String())
+
 	var req MoveTripDraftToPublishModelRequest
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid JSON body")
@@ -25,7 +33,12 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "clientID is required")
 	}
 
-	var resp, err = s.TripService.MoveTripDraftToPublish(c.Context(), dto.UpdateTripRequest{
+	span.SetAttributes(
+		attribute.String("trip_id", req.TripID),
+		attribute.String("driver_id", req.DriverId),
+	)
+
+	var resp, err = s.TripService.MoveTripDraftToPublish(ctx, dto.UpdateTripRequest{
 		TripID:   req.TripID,
 		ClientID: req.ClientID,
 	})

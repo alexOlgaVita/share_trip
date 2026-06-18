@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/repository"
@@ -20,6 +21,11 @@ func (u *TripUsecase) CreateTrip(
 	tx pgx.Tx,
 	req dto.CreateTripRequest,
 ) (*dto.Trip, error) {
+	tracer := otel.Tracer("TripUsecase")
+
+	ctx, span := tracer.Start(ctx, "TripUsecase.CreateTrip")
+	defer span.End()
+
 	logger := logctx.Logger(ctx).With(
 		slog.String("layer", "usecase"),
 		slog.String("usecase", "TripUsecase.CreateTrip"),
