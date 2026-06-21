@@ -26,11 +26,8 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid JSON body")
 	}
 
-	if req.TripID == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "tripID is required")
-	}
-	if req.ClientID == "" {
-		return fiber.NewError(fiber.StatusBadRequest, "clientID is required")
+	if err := publishValidate(&req); err != nil {
+		return err
 	}
 
 	span.SetAttributes(
@@ -63,4 +60,14 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(resp)
+}
+
+func publishValidate(req *MoveTripDraftToPublishModelRequest) error {
+	if req.TripID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "tripID is required")
+	}
+	if req.ClientID == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "clientID is required")
+	}
+	return nil
 }

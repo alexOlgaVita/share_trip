@@ -48,6 +48,45 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		attribute.String("available_seats", req.AvailableSeats),
 	)
 
+	if err := createValidate(&req, logger); err != nil {
+		return err
+	}
+
+	logger = logger.With(
+		slog.String("driverId", req.DriverId),
+		slog.String("fromPoint", req.FromPoint),
+		slog.String("toPoint", req.ToPoint),
+		slog.String("departureTime", req.DepartureTime),
+		slog.String("availableSeats", req.AvailableSeats),
+	)
+	ctx = logctx.WithLogger(ctx, logger)
+	logger.Info("create trip request accepted")
+
+	resp, err := s.TripService.CreateTrip(ctx, dto.CreateTripRequest{
+		DriverId:       req.DriverId,
+		FromPoint:      req.FromPoint,
+		ToPoint:        req.ToPoint,
+		DepartureTime:  req.DepartureTime,
+		AvailableSeats: req.AvailableSeats,
+	})
+	if err != nil {
+		log.Errorw("s.TripService.CreateTrip", err)
+		logger.Error(
+			"create trip failed",
+			slog.Any("error", err),
+		)
+		return fiber.NewError(fiber.StatusInternalServerError, "internal server error")
+	}
+
+	logger.Info(
+		"create trip completed",
+		slog.String("trip_id", resp.ID),
+	)
+
+	return c.Status(fiber.StatusCreated).JSON(resp)
+}
+
+func createValidate(req *CreateTripRequest, logger *slog.Logger) error {
 	if req.DriverId == "" {
 		logger.Warn("create trip failed: driverId is required")
 		return fiber.NewError(fiber.StatusBadRequest, "driverId is required")
@@ -101,37 +140,5 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		logger.Warn("fromPoint and toPoint have the same value")
 		return fiber.NewError(fiber.StatusBadRequest, "fromPoint and toPoint have the same value")
 	}
-
-	logger = logger.With(
-		slog.String("driverId", req.DriverId),
-		slog.String("fromPoint", req.FromPoint),
-		slog.String("toPoint", req.ToPoint),
-		slog.String("departureTime", req.DepartureTime),
-		slog.String("availableSeats", req.AvailableSeats),
-	)
-	ctx = logctx.WithLogger(ctx, logger)
-	logger.Info("create trip request accepted")
-
-	resp, err := s.TripService.CreateTrip(ctx, dto.CreateTripRequest{
-		DriverId:       req.DriverId,
-		FromPoint:      req.FromPoint,
-		ToPoint:        req.ToPoint,
-		DepartureTime:  req.DepartureTime,
-		AvailableSeats: req.AvailableSeats,
-	})
-	if err != nil {
-		log.Errorw("s.TripService.CreateTrip", err)
-		logger.Error(
-			"create trip failed",
-			slog.Any("error", err),
-		)
-		return fiber.NewError(fiber.StatusInternalServerError, "internal server error")
-	}
-
-	logger.Info(
-		"create trip completed",
-		slog.String("trip_id", resp.ID),
-	)
-
-	return c.Status(fiber.StatusCreated).JSON(resp)
+	return nil
 }
