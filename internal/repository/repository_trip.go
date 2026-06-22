@@ -215,17 +215,6 @@ func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStat
 		return fmt.Errorf("r.pool.Exec: %w", err)
 	}
 
-	// добавить сообщение в таблицу уведомлений
-	idEvent := uuid.New().String()
-	_, err = tx.Exec(ctx, "INSERT INTO outbox_event(id, event_name, aggregate_id, payload) values($1, $2, $3, $4)",
-		idEvent, dto.TripEventPublished, id, dto.SentNotificationTripPublishRequest{
-			TripID: id,
-		})
-
-	if err != nil {
-		return fmt.Errorf("r.pool.Exec: %w", err)
-	}
-
 	return nil
 }
 
@@ -313,4 +302,19 @@ func (r *RepoPg) EventList(ctx context.Context, tripId string) ([]dto.TripEvent,
 	}
 
 	return trips, nil
+}
+
+func (r *RepoPg) CreateEvent(ctx context.Context,
+	tx pgx.Tx,
+	eventName string,
+	tripId string) error {
+	idEvent := uuid.New().String()
+	_, err := tx.Exec(ctx, "INSERT INTO outbox_event(id, event_name, aggregate_id, payload) values($1, $2, $3, $4)",
+		idEvent, eventName, tripId, dto.SentNotificationTripPublishRequest{
+			TripID: tripId,
+		})
+	if err != nil {
+		return fmt.Errorf("creating event, r.pool.Exec: %w", err)
+	}
+	return nil
 }

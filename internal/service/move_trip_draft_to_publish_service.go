@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/domain"
@@ -41,6 +43,14 @@ func (s *TripService) MoveTripDraftToPublish(
 			}
 			return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
 		}
+
+		// фиксация события в таблице уведомлений в рамках одной транзакции
+		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, dto.TripEventPublished, req.TripID)
+		if err != nil {
+			log.Errorw("adding event to outbox after usecase.MoveTripDraftToPublish", err)
+			return nil, fiber.NewError(fiber.StatusInternalServerError, "internal server error")
+		}
+
 		return resp, nil
 	})
 
