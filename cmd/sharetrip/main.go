@@ -9,8 +9,8 @@ import (
 	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/middleware"
 	"job4j.ru/share-trip/internal/observability/metrics"
-	"job4j.ru/share-trip/internal/observability/middleware"
 	"job4j.ru/share-trip/internal/observability/tracing"
 	"job4j.ru/share-trip/internal/repository"
 	"job4j.ru/share-trip/internal/service"
@@ -87,12 +87,12 @@ func main() {
 		TripRepo: repo,
 	})
 
-	server := api.NewServer(registry, repo, srv)
+	keycloakClientID := configs.Env("KEYCLOAK_CLIENT_ID", "sharetrip-api")
+	server := api.NewServer(app, registry, repo, srv, keycloakClientID, false)
 
 	app.Use(api.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута
-	//server.Route(app.Group("/api"))
 	server.Route(app.Group("/"))
 
 	err = app.Listen(":8080")

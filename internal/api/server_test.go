@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
+	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/observability/metrics"
@@ -93,11 +94,11 @@ func TestMain(m *testing.M) {
 	srv := service.NewTripService(logger, metrics, testPool, &domain.TripUsecase{
 		TripRepo: repo,
 	})
-	server := api.NewServer(registry, repo, srv)
-	//
-
 	testApp = fiber.New()
-	server.Route(testApp.Group(""))
+	keycloakClientID := configs.Env("KEYCLOAK_CLIENT_ID", "sharetrip-api")
+	server := api.NewServer(testApp, registry, repo, srv, keycloakClientID, true)
+
+	server.Route(testApp)
 
 	code := m.Run()
 
