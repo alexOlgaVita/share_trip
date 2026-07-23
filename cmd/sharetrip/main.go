@@ -87,9 +87,11 @@ func main() {
 		TripRepo: repo,
 	})
 
-	keycloakClientID := configs.Env("KEYCLOAK_CLIENT_ID", "sharetrip-api")
-	server := api.NewServer(app, registry, repo, srv, keycloakClientID, false)
-
+	kcCfg := configs.LoadKeycloak()
+	if err := kcCfg.Validate(); err != nil {
+		log.Fatal(err)
+	}
+	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{})
 	app.Use(api.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута

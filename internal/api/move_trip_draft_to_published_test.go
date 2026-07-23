@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"job4j.ru/share-trip/internal/api/testauth"
 	"job4j.ru/share-trip/internal/dto"
 	"net/http"
 	"testing"
@@ -32,6 +33,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -94,6 +96,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err = testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -143,6 +146,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -205,6 +209,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err = testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -268,6 +273,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -304,6 +310,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -341,6 +348,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -394,6 +402,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err = testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -430,6 +439,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -483,6 +493,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err = testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -521,6 +532,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req) // <-- обязательно: Без этого middleware вернёт 401 даже с mock-сервером.
 
 		resp, err := testApp.Test(req, -1)
 		require.NoError(t, err)
@@ -577,6 +589,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		testauth.WithAuth(req)
 
 		resp, err = testApp.Test(req, -1)
 		require.NoError(t, err)

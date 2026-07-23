@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"job4j.ru/share-trip/configs"
+	"job4j.ru/share-trip/internal/api/testauth"
 	"job4j.ru/share-trip/internal/appl"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/observability/metrics"
@@ -95,8 +96,10 @@ func TestMain(m *testing.M) {
 		TripRepo: repo,
 	})
 	testApp = fiber.New()
-	keycloakClientID := configs.Env("KEYCLOAK_CLIENT_ID", "sharetrip-api")
-	server := api.NewServer(testApp, registry, repo, srv, keycloakClientID, true)
+	kcCfg := configs.LoadKeycloak()
+	kcSrv, mockCfg := testauth.NewKeycloakMock(kcCfg.ClientID, kcCfg.RequiredRole)
+	defer kcSrv.Close()
+	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg)
 
 	server.Route(testApp)
 

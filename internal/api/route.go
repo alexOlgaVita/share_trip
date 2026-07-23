@@ -12,19 +12,19 @@ func (s *Server) Route(route fiber.Router) {
 
 	route.Post(
 		"/trip/",
-		middleware.RequireClientRole(s.ClientID, "client"),
+		middleware.RequireClientRole(s.ClientID, s.requiredRole),
 		s.CreateTrip,
 	)
 
 	route.Put(
 		"/trip/",
-		middleware.RequireClientRole(s.ClientID, "client"),
+		middleware.RequireClientRole(s.ClientID, s.requiredRole),
 		s.MoveTripDraftToPublish,
 	)
 
 	route.Get(
 		"/trip/:tripId",
-		middleware.RequireClientRole(s.ClientID, "client"),
+		middleware.RequireClientRole(s.ClientID, s.requiredRole),
 		s.GetTrip,
 	)
 
