@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"job4j.ru/share-trip/internal/dto"
+	"job4j.ru/share-trip/internal/api/dto"
 )
 
 type ShareTrip struct {

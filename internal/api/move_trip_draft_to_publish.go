@@ -6,8 +6,8 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/domain"
-	"job4j.ru/share-trip/internal/dto"
 )
 
 type MoveTripDraftToPublishModelRequest dto.MoveTripDraftToPublishModelRequest

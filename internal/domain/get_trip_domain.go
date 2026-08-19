@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/dto"
+	"job4j.ru/share-trip/internal/api/dto"
 )
 
 func (u *TripUsecase) GetTrip(

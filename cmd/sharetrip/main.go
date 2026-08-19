@@ -92,7 +92,7 @@ func main() {
 		log.Fatal(err)
 	}
 	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{})
-	app.Use(api.NewHTTPMetricsMiddleware(m))
+	app.Use(middleware.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута
 	server.Route(app.Group("/"))

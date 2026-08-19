@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/dto"
+	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/observability/metrics"
 	"log/slog"

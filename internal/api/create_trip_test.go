@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/api/testauth"
-	"job4j.ru/share-trip/internal/dto"
 	"net/http"
 	"testing"
 
@@ -48,25 +48,16 @@ func TestServer_CreateTrip(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got dto.TripRequest
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
+
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 	})
 }

@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/api/testauth"
-	"job4j.ru/share-trip/internal/dto"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -51,33 +52,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var got dto.Trip
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
 
-		// при наличии реальной записи, можем проверить позитивный кейс
-		tripReq := dto.TripRequest{
-			DriverId:       got.DriverId,
-			FromPoint:      got.FromPoint,
-			ToPoint:        got.ToPoint,
-			DepartureTime:  got.DepartureTime,
-			AvailableSeats: got.AvailableSeats,
-			Status:         dto.TripStatusPublished,
-		}
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 
 		tripID := got.ID
 		driverId := got.DriverId
@@ -111,21 +93,18 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		err = json.Unmarshal(respBody, &got)
+		var gotResp dto.Trip
+		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-
-		tripResp := dto.TripRequest{
-			DriverId:       tripReq.DriverId,
-			FromPoint:      tripReq.FromPoint,
-			ToPoint:        tripReq.ToPoint,
-			DepartureTime:  tripReq.DepartureTime,
-			AvailableSeats: tripReq.AvailableSeats,
-			Status:         got.Status,
-		}
-		require.Equal(t,
-			tripReq,
-			tripResp)
-
+		require.NotEmpty(t, gotResp.ID)
+		require.Equal(t, got.DriverId, gotResp.DriverId)
+		require.Equal(t, got.FromPoint, gotResp.FromPoint)
+		require.Equal(t, got.ToPoint, gotResp.ToPoint)
+		dateTimeFormat, err := dateToUserFormat(got.DepartureTime)
+		require.NoError(t, err)
+		require.Equal(t, dateTimeFormat, gotResp.DepartureTime)
+		require.Equal(t, got.AvailableSeats, gotResp.AvailableSeats)
+		require.Equal(t, dto.TripStatusPublished, gotResp.Status)
 	})
 	t.Run("Перевод поездки в статус 'Опубликовано' - from Published - success", func(t *testing.T) {
 		payload := dto.UpdateTripRequest{
@@ -164,33 +143,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var got dto.Trip
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
 
-		// при наличии реальной записи, можем проверить позитивный кейс
-		tripReq := dto.TripRequest{
-			DriverId:       got.DriverId,
-			FromPoint:      got.FromPoint,
-			ToPoint:        got.ToPoint,
-			DepartureTime:  got.DepartureTime,
-			AvailableSeats: got.AvailableSeats,
-			Status:         dto.TripStatusPublished,
-		}
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 
 		tripID := got.ID
 		driverId := got.DriverId
@@ -224,20 +184,18 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		err = json.Unmarshal(respBody, &got)
+		var gotResp dto.Trip
+		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-
-		tripResp := dto.TripRequest{
-			DriverId:       tripReq.DriverId,
-			FromPoint:      tripReq.FromPoint,
-			ToPoint:        tripReq.ToPoint,
-			DepartureTime:  tripReq.DepartureTime,
-			AvailableSeats: tripReq.AvailableSeats,
-			Status:         got.Status,
-		}
-		require.Equal(t,
-			tripReq,
-			tripResp)
+		require.NotEmpty(t, gotResp.ID)
+		require.Equal(t, got.DriverId, gotResp.DriverId)
+		require.Equal(t, got.FromPoint, gotResp.FromPoint)
+		require.Equal(t, got.ToPoint, gotResp.ToPoint)
+		dateTimeFormat, err := dateToUserFormat(got.DepartureTime)
+		require.NoError(t, err)
+		require.Equal(t, dateTimeFormat, gotResp.DepartureTime)
+		require.Equal(t, got.AvailableSeats, gotResp.AvailableSeats)
+		require.Equal(t, dto.TripStatusPublished, gotResp.Status)
 
 		// повторно отправляем на публикацию
 		resp, err = testApp.Test(req, -1)
@@ -366,23 +324,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var got dto.Trip
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
+
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 
 		// попытка публикации несуществующей заявки
 		tripID := uuid.NewString()
@@ -457,23 +406,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var got dto.Trip
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
+
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 
 		// попытка публикации от имени клиента - не автора заявки
 		tripID := got.ID
@@ -550,23 +490,14 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var got dto.Trip
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
-		require.Equal(t,
-			dto.TripRequest{
-				DriverId:       payload.DriverId,
-				FromPoint:      payload.FromPoint,
-				ToPoint:        payload.ToPoint,
-				DepartureTime:  payload.DepartureTime,
-				AvailableSeats: payload.AvailableSeats,
-				Status:         dto.TripStatusDraft,
-			},
-			dto.TripRequest{
-				DriverId:       got.DriverId,
-				FromPoint:      got.FromPoint,
-				ToPoint:        got.ToPoint,
-				DepartureTime:  got.DepartureTime,
-				AvailableSeats: got.AvailableSeats,
-				Status:         got.Status,
-			})
+
+		require.NotEmpty(t, got.ID)
+		require.Equal(t, payload.DriverId, got.DriverId)
+		require.Equal(t, payload.FromPoint, got.FromPoint)
+		require.Equal(t, payload.ToPoint, got.ToPoint)
+		require.Equal(t, payload.DepartureTime, got.DepartureTime)
+		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
+		require.Equal(t, dto.TripStatusDraft, got.Status)
 
 		//TODO: 2. добавить вызов метода изменения в статус, из которого недопустимо осуществлять публикацию
 
@@ -609,4 +540,15 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 			string(respBody),
 			"client is not driver of this trip")
 	})
+}
+
+func dateToUserFormat(dateTimeIn string) (string, error) {
+	templateDate := "2006-01-02 15:04:05"
+	dateTimeOutParse, err := time.Parse(templateDate, dateTimeIn)
+	if err != nil {
+		return "", err
+	}
+	outputLayout := "01-02-2006 15:04"
+	dateTimeOut := dateTimeOutParse.Format(outputLayout)
+	return dateTimeOut, nil
 }
