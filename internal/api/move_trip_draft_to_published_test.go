@@ -53,13 +53,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+		requireEqualCreatedDraftTrip(t, got, payload)
 
 		tripID := got.ID
 		driverId := got.DriverId
@@ -96,15 +90,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var gotResp dto.Trip
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		require.NotEmpty(t, gotResp.ID)
-		require.Equal(t, got.DriverId, gotResp.DriverId)
-		require.Equal(t, got.FromPoint, gotResp.FromPoint)
-		require.Equal(t, got.ToPoint, gotResp.ToPoint)
-		dateTimeFormat, err := dateToUserFormat(got.DepartureTime)
-		require.NoError(t, err)
-		require.Equal(t, dateTimeFormat, gotResp.DepartureTime)
-		require.Equal(t, got.AvailableSeats, gotResp.AvailableSeats)
-		require.Equal(t, dto.TripStatusPublished, gotResp.Status)
+		requireEqualPublishedTrip(t, got, gotResp)
 	})
 	t.Run("Перевод поездки в статус 'Опубликовано' - from Published - success", func(t *testing.T) {
 		payload := dto.UpdateTripRequest{
@@ -144,13 +130,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+		requireEqualCreatedDraftTrip(t, got, payload)
 
 		tripID := got.ID
 		driverId := got.DriverId
@@ -187,15 +167,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		var gotResp dto.Trip
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		require.NotEmpty(t, gotResp.ID)
-		require.Equal(t, got.DriverId, gotResp.DriverId)
-		require.Equal(t, got.FromPoint, gotResp.FromPoint)
-		require.Equal(t, got.ToPoint, gotResp.ToPoint)
-		dateTimeFormat, err := dateToUserFormat(got.DepartureTime)
-		require.NoError(t, err)
-		require.Equal(t, dateTimeFormat, gotResp.DepartureTime)
-		require.Equal(t, got.AvailableSeats, gotResp.AvailableSeats)
-		require.Equal(t, dto.TripStatusPublished, gotResp.Status)
+		requireEqualPublishedTrip(t, got, gotResp)
 
 		// повторно отправляем на публикацию
 		resp, err = testApp.Test(req, -1)
@@ -325,13 +297,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+		requireEqualCreatedDraftTrip(t, got, payload)
 
 		// попытка публикации несуществующей заявки
 		tripID := uuid.NewString()
@@ -407,13 +373,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+		requireEqualCreatedDraftTrip(t, got, payload)
 
 		// попытка публикации от имени клиента - не автора заявки
 		tripID := got.ID
@@ -491,13 +451,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
-		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+		requireEqualCreatedDraftTrip(t, got, payload)
 
 		//TODO: 2. добавить вызов метода изменения в статус, из которого недопустимо осуществлять публикацию
 
@@ -540,6 +494,41 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 			string(respBody),
 			"client is not driver of this trip")
 	})
+}
+
+func requireEqualCreatedDraftTrip(t *testing.T, got dto.Trip, payload dto.UpdateTripRequest) {
+	t.Helper()
+	require.NotEmpty(t, got.ID)
+	require.Equal(t, dto.Trip{
+		ID:             got.ID,
+		DriverId:       payload.DriverId,
+		FromPoint:      payload.FromPoint,
+		ToPoint:        payload.ToPoint,
+		DepartureTime:  payload.DepartureTime,
+		AvailableSeats: payload.AvailableSeats,
+		Status:         dto.TripStatusDraft,
+		CreatedAt:      got.CreatedAt,
+	}, got)
+}
+
+func requireEqualPublishedTrip(t *testing.T, created dto.Trip, got dto.Trip) {
+	t.Helper()
+	require.NotEmpty(t, got.ID)
+	require.NotEmpty(t, got.CreatedAt)
+
+	dateTimeFormat, err := dateToUserFormat(created.DepartureTime)
+	require.NoError(t, err)
+
+	require.Equal(t, dto.Trip{
+		ID:             created.ID,
+		DriverId:       created.DriverId,
+		FromPoint:      created.FromPoint,
+		ToPoint:        created.ToPoint,
+		DepartureTime:  dateTimeFormat,
+		AvailableSeats: created.AvailableSeats,
+		Status:         dto.TripStatusPublished,
+		CreatedAt:      got.CreatedAt,
+	}, got)
 }
 
 func dateToUserFormat(dateTimeIn string) (string, error) {

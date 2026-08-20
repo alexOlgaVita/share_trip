@@ -3,6 +3,8 @@ GO := go
 GO_PKG := ./...
 COVERAGE_PROFILE := coverage.out
 GOOSE_MIGRATION_DIR := migrations
+NAME_TRIP := create_table_trip
+NAME_OUTBOX_EVENT := create_table_outbox_event
 DOCKER_NAME := pg
 BINARY_NAME := sharetrip.exe
 MAIN_PKG := ./cmd/sharetrip
@@ -71,10 +73,13 @@ migrate-up:
 migrate-down:
 	goose -dir $(GOOSE_MIGRATION_DIR) postgres "postgres://postgres:password@localhost:6543/sharetrip?sslmode=disable" down
 
+.PHONY: migrate-create
+migrate-create:
+	goose -dir $(GOOSE_MIGRATION_DIR) create -s $(NAME_TRIP) sql
+	goose -dir $(GOOSE_MIGRATION_DIR) create -s $(NAME_OUTBOX_EVENT) sql
+
 .PHONY: up
 up:
-	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_trip sql
-	goose -dir $(GOOSE_MIGRATION_DIR) create -s create_table_outbox_event.sql
 	docker-compose up -d
 
 .PHONY: down

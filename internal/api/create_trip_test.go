@@ -53,11 +53,16 @@ func TestServer_CreateTrip(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotEmpty(t, got.ID)
-		require.Equal(t, payload.DriverId, got.DriverId)
-		require.Equal(t, payload.FromPoint, got.FromPoint)
-		require.Equal(t, payload.ToPoint, got.ToPoint)
-		require.Equal(t, payload.DepartureTime, got.DepartureTime)
-		require.Equal(t, payload.AvailableSeats, got.AvailableSeats)
-		require.Equal(t, dto.TripStatusDraft, got.Status)
+
+		expected := dto.TripRequest{
+			ID:             got.ID,
+			DriverId:       payload.DriverId,
+			FromPoint:      payload.FromPoint,
+			ToPoint:        payload.ToPoint,
+			DepartureTime:  payload.DepartureTime,
+			AvailableSeats: payload.AvailableSeats,
+			Status:         dto.TripStatusDraft,
+		}
+		require.Equal(t, expected, got)
 	})
 }
