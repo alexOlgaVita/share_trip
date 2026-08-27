@@ -8,6 +8,7 @@ import (
 	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/appl"
+	contractclient "job4j.ru/share-trip/internal/clients/contract"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/middleware"
 	"job4j.ru/share-trip/internal/observability/metrics"
@@ -91,7 +92,20 @@ func main() {
 	if err := kcCfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
-	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{})
+
+	cfgContract, err := configs.LoadContract()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cfgContract.Validate(); err != nil {
+		log.Fatal(err)
+	}
+
+	contractclient.ClientFactory = func() contractclient.Client {
+		return contractclient.NewClient(cfgContract)
+	}
+
+	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{}, cfgContract)
 	app.Use(middleware.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута

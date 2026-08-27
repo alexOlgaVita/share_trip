@@ -17,9 +17,15 @@ func (s *Server) Route(route fiber.Router) {
 	)
 
 	route.Put(
-		"/trip/",
+		"/trip/publish",
 		middleware.RequireClientRole(s.ClientID, s.requiredRole),
 		s.MoveTripDraftToPublish,
+	)
+
+	route.Put(
+		"/trip/started",
+		middleware.RequireClientRole(s.ClientID, s.requiredRole),
+		s.MoveTripPublishedToStarted,
 	)
 
 	route.Get(

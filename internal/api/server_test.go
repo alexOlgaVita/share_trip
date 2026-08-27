@@ -99,7 +99,16 @@ func TestMain(m *testing.M) {
 	kcCfg := configs.LoadKeycloak()
 	kcSrv, mockCfg := testauth.NewKeycloakMock(kcCfg.ClientID, kcCfg.RequiredRole)
 	defer kcSrv.Close()
-	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg)
+
+	cfgContract, err := configs.LoadContract()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cfgContract.Validate(); err != nil {
+		log.Fatal(err)
+	}
+
+	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg, cfgContract)
 
 	server.Route(testApp)
 

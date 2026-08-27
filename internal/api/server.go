@@ -16,6 +16,7 @@ type Server struct {
 	TripService  *service.TripService
 	ClientID     string
 	requiredRole string
+	ContractCfg  configs.Contract
 }
 
 func NewServer(app *fiber.App,
@@ -24,6 +25,7 @@ func NewServer(app *fiber.App,
 	service *service.TripService,
 	kc configs.Keycloak,
 	testOverride middleware.KeycloakConfig,
+	contractCfg configs.Contract,
 ) *Server {
 	s := &Server{
 		app:          app,
@@ -32,6 +34,7 @@ func NewServer(app *fiber.App,
 		TripService:  service,
 		ClientID:     kc.ClientID,
 		requiredRole: kc.RequiredRole,
+		ContractCfg:  contractCfg,
 	}
 
 	mwCfg := middleware.KeycloakConfig{

@@ -3,6 +3,7 @@ module job4j.ru/share-trip
 go 1.25.0
 
 require (
+	github.com/go-resty/resty/v2 v2.17.2
 	github.com/gofiber/adaptor/v2 v2.2.1
 	github.com/gofiber/contrib/otelfiber/v2 v2.2.1
 	github.com/gofiber/fiber/v2 v2.52.13
@@ -71,6 +72,7 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/testcontainers/testcontainers-go v0.40.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect

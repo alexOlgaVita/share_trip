@@ -67,7 +67,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err = http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err = http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err := http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -235,7 +235,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err := http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err = http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -388,7 +388,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err = http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
@@ -469,7 +469,7 @@ func TestServer_MoveTripDraftToPublished_fromDrat_ok(t *testing.T) {
 
 		req, err = http.NewRequest(
 			http.MethodPut,
-			"/trip/",
+			"/trip/publish",
 			bytes.NewReader(body),
 		)
 		require.NoError(t, err)
