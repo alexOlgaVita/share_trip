@@ -108,7 +108,15 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg, cfgContract)
+	cfgKafka, err := configs.LoadKafkaConf()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cfgKafka.Validate(); err != nil {
+		log.Fatal(err)
+	}
+
+	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg, cfgContract, cfgKafka)
 
 	server.Route(testApp)
 

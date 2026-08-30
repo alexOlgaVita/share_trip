@@ -17,6 +17,7 @@ type Server struct {
 	ClientID     string
 	requiredRole string
 	ContractCfg  configs.Contract
+	KafkaCfg     configs.KafkaConf
 }
 
 func NewServer(app *fiber.App,
@@ -26,6 +27,7 @@ func NewServer(app *fiber.App,
 	kc configs.Keycloak,
 	testOverride middleware.KeycloakConfig,
 	contractCfg configs.Contract,
+	kafkaCfg configs.KafkaConf,
 ) *Server {
 	s := &Server{
 		app:          app,
@@ -35,6 +37,7 @@ func NewServer(app *fiber.App,
 		ClientID:     kc.ClientID,
 		requiredRole: kc.RequiredRole,
 		ContractCfg:  contractCfg,
+		KafkaCfg:     kafkaCfg,
 	}
 
 	mwCfg := middleware.KeycloakConfig{

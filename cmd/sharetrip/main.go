@@ -105,7 +105,15 @@ func main() {
 		return contractclient.NewClient(cfgContract)
 	}
 
-	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{}, cfgContract)
+	cfgKafka, err := configs.LoadKafkaConf()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cfgKafka.Validate(); err != nil {
+		log.Fatal(err)
+	}
+
+	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{}, cfgContract, cfgKafka)
 	app.Use(middleware.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута

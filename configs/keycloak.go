@@ -13,7 +13,7 @@ func LoadKeycloak() Keycloak {
 	return Keycloak{
 		Issuer:       Env("KEYCLOAK_ISSUER", "http://localhost:8087/realms/sharetrip"),
 		ClientID:     Env("KEYCLOAK_CLIENT_ID", "sharetrip-api"),
-		ClientSecret: Env("KEYCLOAK_CLIENT_SECRET", "S8GXiEbeewsHNniYvmUP4AGQM6QbZY3B"),
+		ClientSecret: Env("KEYCLOAK_CLIENT_SECRET", "3ZBTiILPjoo47XscMfk9kN3xSqrntYHO"),
 		RequiredRole: Env("KEYCLOAK_REQUIRED_ROLE", "client"),
 	}
 }

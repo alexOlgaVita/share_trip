@@ -37,8 +37,9 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 
 	var resp, err = s.TripService.MoveTripDraftToPublish(ctx, dto.UpdateTripRequest{
 		TripID:   req.TripID,
-		ClientID: req.ClientID,
-	})
+		ClientID: req.ClientID},
+		s.KafkaCfg.BrokerList,
+	)
 
 	if err != nil {
 
