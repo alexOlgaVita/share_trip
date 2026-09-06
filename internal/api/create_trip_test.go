@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"job4j.ru/share-trip/internal/api/dto"
+	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/api/testauth"
 	"net/http"
 	"testing"
@@ -14,9 +14,11 @@ import (
 )
 
 func TestServer_CreateTrip(t *testing.T) {
+	t.Parallel()
 	t.Run("success - создание поездки", func(t *testing.T) {
-		payload := dto.CreateTripRequest{
-			DriverId:       uuid.NewString(),
+		t.Parallel()
+		payload := api.TripRequest{
+			DriverID:       uuid.NewString(),
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -48,21 +50,21 @@ func TestServer_CreateTrip(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.TripRequest
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
+		require.NotEmpty(t, got.Trip.ID)
 
-		require.NotEmpty(t, got.ID)
-
-		expected := dto.TripRequest{
-			ID:             got.ID,
-			DriverId:       payload.DriverId,
+		expected := api.TripResponse{
+			ID:             got.Trip.ID,
+			DriverID:       payload.DriverID,
 			FromPoint:      payload.FromPoint,
 			ToPoint:        payload.ToPoint,
 			DepartureTime:  payload.DepartureTime,
 			AvailableSeats: payload.AvailableSeats,
-			Status:         dto.TripStatusDraft,
+			Status:         string(api.StatusDraft),
+			CreatedAt:      got.Trip.CreatedAt,
 		}
-		require.Equal(t, expected, got)
+		require.Equal(t, expected, got.Trip)
 	})
 }

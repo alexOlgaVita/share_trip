@@ -5,19 +5,12 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 )
-
-type TripRequest dto.TripRequest
-
-type CreateTripRequest dto.CreateTripRequest
-
-type CreateTripResponse dto.CreateTripResponse
 
 func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	tracer := otel.Tracer("trip-api")
@@ -41,7 +34,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	}
 
 	span.SetAttributes(
-		attribute.String("driver_id", req.DriverId),
+		attribute.String("driver_id", req.DriverID),
 		attribute.String("departure_time", req.DepartureTime),
 		attribute.String("to_point", req.ToPoint),
 		attribute.String("from_point", req.FromPoint),
@@ -53,7 +46,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	}
 
 	logger = logger.With(
-		slog.String("driverId", req.DriverId),
+		slog.String("driverId", req.DriverID),
 		slog.String("fromPoint", req.FromPoint),
 		slog.String("toPoint", req.ToPoint),
 		slog.String("departureTime", req.DepartureTime),
@@ -62,13 +55,7 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 	ctx = logctx.WithLogger(ctx, logger)
 	logger.Info("create trip request accepted")
 
-	resp, err := s.TripService.CreateTrip(ctx, dto.CreateTripRequest{
-		DriverId:       req.DriverId,
-		FromPoint:      req.FromPoint,
-		ToPoint:        req.ToPoint,
-		DepartureTime:  req.DepartureTime,
-		AvailableSeats: req.AvailableSeats,
-	})
+	resp, err := s.TripService.CreateTrip(ctx, toServiceCreateTripRequest(req))
 	if err != nil {
 		log.Errorw("s.TripService.CreateTrip", err)
 		logger.Error(
@@ -83,11 +70,16 @@ func (s *Server) CreateTrip(c *fiber.Ctx) error {
 		slog.String("trip_id", resp.ID),
 	)
 
-	return c.Status(fiber.StatusCreated).JSON(resp)
+	apiResp, err := fromServiceCreateTripResponse(resp)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "internal mapping error")
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(apiResp)
 }
 
 func createValidate(req *CreateTripRequest, logger *slog.Logger) error {
-	if req.DriverId == "" {
+	if req.DriverID == "" {
 		logger.Warn("create trip failed: driverId is required")
 		return fiber.NewError(fiber.StatusBadRequest, "driverId is required")
 	}

@@ -4,41 +4,52 @@ import (
 	"context"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
 )
 
 func (u *TripUsecase) MoveTripDraftToPublish(
 	ctx context.Context,
 	tx pgx.Tx,
-	req dto.UpdateTripRequest,
-) (*dto.Trip, error) {
+	req MoveTripDraftToPublishRequest,
+) (MoveTripDraftToPublishResponse, error) {
 	tracer := otel.Tracer("TripUsecase")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.MoveTripDraftToPublish")
 	defer span.End()
 
-	trip, err := u.TripRepo.GetForUpdateByID(ctx, tx, req.TripID)
+	repoReq := toRepositoryMoveTripDraftToPublishRequest(req)
+	trip, err := u.TripRepo.GetForUpdateByID(ctx, tx, repoReq.ID)
 	if err != nil {
-		return nil, err
+		return MoveTripDraftToPublishResponse{}, err
 	}
 
-	if trip.DriverId != req.ClientID {
-		return nil, ErrClientNotDriver
+	if trip.DriverID != repoReq.DriverID {
+		return MoveTripDraftToPublishResponse{}, ErrClientNotDriver
 	}
 
-	if trip.Status == dto.TripStatusPublished {
-		return trip, ErrStatusIsPublishedAlready
+	if trip.Status == string(StatusPublished) {
+		return MoveTripDraftToPublishResponse{
+				ID:             trip.ID,
+				DriverID:       trip.DriverID,
+				FromPoint:      trip.FromPoint,
+				ToPoint:        trip.ToPoint,
+				DepartureTime:  trip.DepartureTime,
+				AvailableSeats: trip.AvailableSeats,
+				Status:         trip.Status,
+				CreatedAt:      trip.CreatedAt,
+			},
+			ErrStatusIsPublishedAlready
 	}
 
-	if trip.Status != dto.TripStatusDraft {
-		return nil, ErrNotAllowedCurrentStatusToPublish
+	if trip.Status != string(StatusDraft) {
+		return MoveTripDraftToPublishResponse{}, ErrNotAllowedCurrentStatusToPublish
 	}
 
-	err = u.TripRepo.UpdateStatus(ctx, tx, trip.ID, trip.Status, dto.TripStatusPublished)
+	tripResp, err := u.TripRepo.MoveTripDraftToPublish(ctx, tx, trip.ID, string(StatusPublished))
 	if err != nil {
-		return nil, err
+		return MoveTripDraftToPublishResponse{}, err
 	}
-	trip.Status = dto.TripStatusPublished
+	domainTripResp := fromRepositoryMoveTripDraftToPublishResponse(tripResp)
+	/////trip.Status = string(StatusPublished)
 
-	return trip, nil
+	return domainTripResp, nil
 }

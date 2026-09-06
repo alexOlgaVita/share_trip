@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/observability/metrics"
 	"log/slog"
@@ -25,13 +24,14 @@ func NewRepoPg(metrics *metrics.Metrics, pool *pgxpool.Pool) *RepoPg {
 	return &RepoPg{metrics: metrics, pool: pool}
 }
 
-func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
+func (r *RepoPg) Create(ctx context.Context, it CreateTripRequest) (*CreateTripResponse, error) {
 	tracer := otel.Tracer("TripRepository")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.Create")
 	defer span.End()
 
 	started := time.Now()
+
 	result := "success"
 
 	defer func() {
@@ -51,7 +51,7 @@ func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
 		slog.String("repository", "TripRepository"),
 		slog.String("operation", "Create"),
 		slog.String("trip_id", it.ID),
-		slog.String("driverId", it.DriverId),
+		slog.String("driverId", it.DriverID),
 	)
 
 	logger.Info("insert trip started")
@@ -60,7 +60,7 @@ func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
 	_, err := r.pool.Exec(
 		ctx,
 		`insert into trips(id, driver_id, from_point, to_point, departure_time, seats, status) values($1, $2, $3, $4, $5, $6, $7)`,
-		it.ID, it.DriverId, it.FromPoint, it.ToPoint, it.DepartureTime, it.AvailableSeats, it.Status,
+		it.ID, it.DriverID, it.FromPoint, it.ToPoint, it.DepartureTime, it.AvailableSeats, it.Status,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("r.pool.Exec: %w", err)
@@ -81,20 +81,21 @@ func (r *RepoPg) Create(ctx context.Context, it dto.Trip) (*dto.Trip, error) {
 	}
 
 	logger.Info("insert trip completed")
-	return &it, nil
+	createTripResponse := CreateTripResponse(it)
+	return &createTripResponse, nil
 }
 
-func (r *RepoPg) List(ctx context.Context) ([]dto.Trip, error) {
+func (r *RepoPg) List(ctx context.Context) ([]CreateTripResponse, error) {
 	rows, err := r.pool.Query(ctx, `select id, name from trips`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var trips []dto.Trip
+	var trips []CreateTripResponse
 	for rows.Next() {
-		var item dto.Trip
-		if err := rows.Scan(&item.ID, &item.DriverId, &item.FromPoint, &item.ToPoint, &item.DepartureTime, &item.AvailableSeats); err != nil {
+		var item CreateTripResponse
+		if err := rows.Scan(&item.ID, &item.DriverID, &item.FromPoint, &item.ToPoint, &item.DepartureTime, &item.AvailableSeats); err != nil {
 			return nil, err
 		}
 		trips = append(trips, item)
@@ -107,22 +108,22 @@ func (r *RepoPg) List(ctx context.Context) ([]dto.Trip, error) {
 	return trips, nil
 }
 
-func (r *RepoPg) Get(ctx context.Context, tripId string) (dto.Trip, error) {
-	var it dto.Trip
+func (r *RepoPg) Get(ctx context.Context, tripId string) (*GetTripResponse, error) {
+	var it GetTripResponse
 	err := r.pool.QueryRow(
 		ctx,
 		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status from trips where id = $1`,
 		tripId,
-	).Scan(&it.ID, &it.DriverId, &it.FromPoint, &it.ToPoint, &it.DepartureTime, &it.AvailableSeats, &it.Status)
+	).Scan(&it.ID, &it.DriverID, &it.FromPoint, &it.ToPoint, &it.DepartureTime, &it.AvailableSeats, &it.Status)
 
-	return it, err
+	return &it, err
 }
 
 func (r *RepoPg) GetByID(
 	ctx context.Context,
 	tx pgx.Tx,
 	id string,
-) (*dto.Trip, error) {
+) (*GetTripResponse, error) {
 	tracer := otel.Tracer("TripRepository")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.GetByID")
@@ -143,14 +144,14 @@ func (r *RepoPg) GetByID(
 		).Observe(time.Since(started).Seconds())
 	}()
 
-	trip := &dto.Trip{}
+	trip := &GetTripResponse{}
 
 	err := tx.QueryRow(
 		ctx,
 		`select id, driver_id, from_point, to_point, COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), ''), seats, status, COALESCE(to_char(created_at, 'MM-DD-YYYY HH24:MI'), '') from trips where id = $1 `,
 		id).Scan(
 		&trip.ID,
-		&trip.DriverId,
+		&trip.DriverID,
 		&trip.FromPoint,
 		&trip.ToPoint,
 		&trip.DepartureTime,
@@ -181,7 +182,25 @@ func (r *RepoPg) Update(ctx context.Context, name string, newName string) error 
 	return nil
 }
 
-func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStatus string, newStatus string) error {
+func (r *RepoPg) MoveTripDraftToPublish(ctx context.Context, tx pgx.Tx, id string, oldStatus string) (MoveTripDraftToPublishResponse, error) {
+	resp, err := r.UpdateStatus(ctx, tx, id, oldStatus, string(StatusPublished))
+	if err != nil {
+		return MoveTripDraftToPublishResponse{}, err
+	}
+	resResp := toMoveTripDraftToPublishResponse(*resp)
+	return resResp, nil
+}
+
+func (r *RepoPg) MoveTripPublishToStarted(ctx context.Context, tx pgx.Tx, id string, oldStatus string) (MoveTripPublishToStartResponse, error) {
+	resp, err := r.UpdateStatus(ctx, tx, id, oldStatus, string(StatusStarted))
+	if err != nil {
+		return MoveTripPublishToStartResponse{}, err
+	}
+	resResp := toMoveTripPublishToStartResponse(*resp)
+	return resResp, nil
+}
+
+func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStatus string, newStatus string) (*UpdateTripResponse, error) {
 	tracer := otel.Tracer("TripRepository")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.UpdateStatus")
@@ -190,7 +209,12 @@ func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStat
 	started := time.Now()
 	result := "success"
 
+	var err error
+
 	defer func() {
+		if err != nil {
+			result = "error"
+		}
 		r.metrics.RepositoryQueryTotal.WithLabelValues(
 			"trip_updateStatus",
 			result,
@@ -202,20 +226,34 @@ func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStat
 		).Observe(time.Since(started).Seconds())
 	}()
 
-	_, err := tx.Exec(ctx, "UPDATE trips SET status = $2 WHERE id = $1", id, newStatus)
+	var updatedTrip UpdateTripResponse
+	//	query := "UPDATE trips SET status = $2 WHERE id = $1 RETURNING id, driver_id, from_point, to_point, departure_time, seats, status, created_at"
+	query := "UPDATE trips SET status = $2 WHERE id = $1 RETURNING id, driver_id, from_point, to_point, " +
+		"COALESCE(to_char(departure_time, 'MM-DD-YYYY HH24:MI'), '') AS departure_time, seats, status, COALESCE(to_char(created_at, 'MM-DD-YYYY HH24:MI'), '') AS created_at"
+	err = tx.QueryRow(ctx, query, id, newStatus).Scan(
+		&updatedTrip.ID,
+		&updatedTrip.DriverID,
+		&updatedTrip.FromPoint,
+		&updatedTrip.ToPoint,
+		&updatedTrip.DepartureTime,
+		&updatedTrip.AvailableSeats,
+		&updatedTrip.Status,
+		&updatedTrip.CreatedAt,
+	)
 	if err != nil {
-		return fmt.Errorf("r.pool.Exec: %w", err)
+		return nil, fmt.Errorf("r.pool.Exec (update): %w", err)
 	}
-	// отразить смену статуса в исторической таблице
+	///////
+	// 2. Отражаем смену статуса в исторической таблице
 	idHist := uuid.New().String()
 	_, err = tx.Exec(ctx, "INSERT INTO trip_history(id, trip_id, from_status, to_status) values($1, $2, $3, $4)",
 		idHist, id, oldStatus, newStatus)
 
 	if err != nil {
-		return fmt.Errorf("r.pool.Exec: %w", err)
+		return nil, fmt.Errorf("r.pool.Exec (history): %w", err)
 	}
 
-	return nil
+	return &updatedTrip, nil
 }
 
 func (r *RepoPg) Delete(ctx context.Context, name string) error {
@@ -250,8 +288,8 @@ func (r *RepoPg) GetForUpdateByID(
 	ctx context.Context,
 	tx pgx.Tx,
 	id string,
-) (*dto.Trip, error) {
-	trip := &dto.Trip{}
+) (*Trip, error) {
+	trip := &Trip{}
 	err := tx.QueryRow(ctx, "SELECT "+
 		"id, "+
 		"driver_id, "+
@@ -263,7 +301,7 @@ func (r *RepoPg) GetForUpdateByID(
 		"COALESCE(to_char(created_at, 'MM-DD-YYYY HH24:MI'), '') AS created_at "+
 		"FROM trips WHERE id = $1 FOR UPDATE", id).Scan(
 		&trip.ID,
-		&trip.DriverId,
+		&trip.DriverID,
 		&trip.FromPoint,
 		&trip.ToPoint,
 		&trip.DepartureTime,
@@ -281,16 +319,16 @@ func (r *RepoPg) GetForUpdateByID(
 	return trip, nil
 }
 
-func (r *RepoPg) EventList(ctx context.Context, tripId string) ([]dto.TripEvent, error) {
+func (r *RepoPg) EventList(ctx context.Context, tripId string) ([]TripEvent, error) {
 	rows, err := r.pool.Query(ctx, `select id, event_name from outbox_event  WHERE aggregate_id = $1`, tripId)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var trips []dto.TripEvent
+	var trips []TripEvent
 	for rows.Next() {
-		var item dto.TripEvent
+		var item TripEvent
 		if err := rows.Scan(&item.ID, &item.Name); err != nil {
 			return nil, err
 		}
@@ -310,7 +348,7 @@ func (r *RepoPg) CreateEvent(ctx context.Context,
 	tripId string) error {
 	idEvent := uuid.New().String()
 	_, err := tx.Exec(ctx, "INSERT INTO outbox_event(id, event_name, aggregate_id, payload) values($1, $2, $3, $4)",
-		idEvent, eventName, tripId, dto.SentNotificationTripPublishRequest{
+		idEvent, eventName, tripId, SentNotificationTripPublishRequest{
 			TripID: tripId,
 		})
 	if err != nil {

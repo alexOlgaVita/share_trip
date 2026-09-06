@@ -84,9 +84,6 @@ func main() {
 	registry := prometheus.NewRegistry()
 	m := metrics.New(registry)
 	repo := repository.NewRepoPg(m, pool)
-	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
-		TripRepo: repo,
-	})
 
 	kcCfg := configs.LoadKeycloak()
 	if err := kcCfg.Validate(); err != nil {
@@ -101,9 +98,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	contractclient.ClientFactory = func() contractclient.Client {
-		return contractclient.NewClient(cfgContract)
-	}
+	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
+		TripRepo:       repo,
+		ContractClient: contractclient.NewClient(cfgContract),
+	})
 
 	cfgKafka, err := configs.LoadKafkaConf()
 	if err != nil {

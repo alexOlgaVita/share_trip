@@ -8,7 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/domain"
 	"strings"
 	"time"
@@ -16,8 +15,8 @@ import (
 
 func (s *TripService) MoveTripPublishToStarted(
 	ctx context.Context,
-	req dto.UpdateTripRequest,
-) (*dto.Trip, error) {
+	req MoveTripPublishToStartRequest,
+) (MoveTripPublishToStartResponse, error) {
 	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.MoveTripPublishToStarted")
 	defer span.End()
 
@@ -30,11 +29,8 @@ func (s *TripService) MoveTripPublishToStarted(
 			Observe(time.Since(started).Seconds())
 	}()
 
-	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*dto.Trip, error) {
-		resp, err := s.TripUsecase.MoveTripPublishedToStarted(ctx, tx, dto.UpdateTripRequest{
-			TripID:   req.TripID,
-			ClientID: req.ClientID,
-		})
+	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*MoveTripPublishToStartResponse, error) {
+		domainResp, err := s.TripUsecase.MoveTripPublishedToStarted(ctx, tx, toDomainMoveTripPublishToStartRequest(req))
 		if err != nil {
 			if errors.Is(err, domain.ErrTripNotFound) ||
 				errors.Is(err, domain.ErrClientNotDriver) ||
@@ -45,20 +41,21 @@ func (s *TripService) MoveTripPublishToStarted(
 			}
 			return nil, fmt.Errorf("usecase.MoveTripPublishToStarted: %w", err)
 		}
+		serviceResp := fromDomainMoveTripPublishToStartResponse(domainResp)
 
 		// фиксация события в таблице уведомлений в рамках одной транзакции
-		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, dto.TripEventStarted, req.TripID)
+		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, string(TripStarted), req.TripID)
 		if err != nil {
 			log.Errorw("adding event to outbox after usecase.MoveTripPublishToStarted", err)
 			return nil, fiber.NewError(fiber.StatusInternalServerError, "internal server error")
 		}
 
-		return resp, nil
+		return &serviceResp, nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed in transaction: %w", err)
+		return MoveTripPublishToStartResponse{}, fmt.Errorf("failed in transaction: %w", err)
 	}
 
-	return res, nil
+	return *res, nil
 }

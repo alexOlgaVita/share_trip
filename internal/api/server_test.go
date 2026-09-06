@@ -8,10 +8,13 @@ import (
 	"job4j.ru/share-trip/configs"
 	"job4j.ru/share-trip/internal/api/testauth"
 	"job4j.ru/share-trip/internal/appl"
+	contractclient "job4j.ru/share-trip/internal/clients/contract"
 	"job4j.ru/share-trip/internal/domain"
+	"job4j.ru/share-trip/internal/middleware"
 	"job4j.ru/share-trip/internal/observability/metrics"
 	"job4j.ru/share-trip/internal/repository"
 	"log"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -27,11 +30,16 @@ import (
 )
 
 var (
-	testCtx       context.Context
-	testDB        *sql.DB
-	testPool      *pgxpool.Pool
-	testApp       *fiber.App
-	testContainer *postgres.PostgresContainer
+	testCtx         context.Context
+	testDB          *sql.DB
+	testPool        *pgxpool.Pool
+	testApp         *fiber.App
+	testContainer   *postgres.PostgresContainer
+	testLogger      *slog.Logger
+	testKcCfg       configs.Keycloak
+	testMockCfg     middleware.KeycloakConfig
+	testContractCfg configs.Contract
+	testKafkaCfg    configs.KafkaConf
 )
 
 func TestMain(m *testing.M) {
@@ -83,42 +91,36 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	testLogger = logger
 
 	defer func() {
 		if err := logFile.Close(); err != nil {
 			fmt.Fprintf(os.Stderr, "failed to close log file: %v\n", err)
 		}
 	}()
-	registry := prometheus.NewRegistry()
-	metrics := metrics.New(registry)
-	repo := repository.NewRepoPg(metrics, testPool)
-	srv := service.NewTripService(logger, metrics, testPool, &domain.TripUsecase{
-		TripRepo: repo,
-	})
-	testApp = fiber.New()
-	kcCfg := configs.LoadKeycloak()
-	kcSrv, mockCfg := testauth.NewKeycloakMock(kcCfg.ClientID, kcCfg.RequiredRole)
+
+	testKcCfg = configs.LoadKeycloak()
+	kcSrv, mockCfg := testauth.NewKeycloakMock(testKcCfg.ClientID, testKcCfg.RequiredRole)
+	testMockCfg = mockCfg
 	defer kcSrv.Close()
 
-	cfgContract, err := configs.LoadContract()
+	testContractCfg, err = configs.LoadContract()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := cfgContract.Validate(); err != nil {
+	if err := testContractCfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
 
-	cfgKafka, err := configs.LoadKafkaConf()
+	testKafkaCfg, err = configs.LoadKafkaConf()
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := cfgKafka.Validate(); err != nil {
+	if err := testKafkaCfg.Validate(); err != nil {
 		log.Fatal(err)
 	}
 
-	server := api.NewServer(testApp, registry, repo, srv, kcCfg, mockCfg, cfgContract, cfgKafka)
-
-	server.Route(testApp)
+	testApp = newTestAppWithContractClient(nil)
 
 	code := m.Run()
 
@@ -133,6 +135,20 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(code)
+}
+
+func newTestAppWithContractClient(client contractclient.Client) *fiber.App {
+	registry := prometheus.NewRegistry()
+	m := metrics.New(registry)
+	repo := repository.NewRepoPg(m, testPool)
+	srv := service.NewTripService(testLogger, m, testPool, &domain.TripUsecase{
+		TripRepo:       repo,
+		ContractClient: client,
+	})
+	app := fiber.New()
+	server := api.NewServer(app, registry, repo, srv, testKcCfg, testMockCfg, testContractCfg, testKafkaCfg)
+	server.Route(app)
+	return app
 }
 
 func waitReady(db *sql.DB) {

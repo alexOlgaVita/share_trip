@@ -9,10 +9,6 @@ import (
 	"job4j.ru/share-trip/internal/domain"
 )
 
-type GetTripResponse struct {
-	Trip TripRequest `json:"trip"`
-}
-
 func (s *Server) GetTrip(c *fiber.Ctx) error {
 	tracer := otel.Tracer("trip-api")
 
@@ -47,7 +43,7 @@ func (s *Server) GetTrip(c *fiber.Ctx) error {
 
 	res := TripRequest{
 		ID:             trip.ID,
-		DriverId:       trip.DriverId,
+		DriverID:       trip.DriverID,
 		FromPoint:      trip.FromPoint,
 		ToPoint:        trip.ToPoint,
 		DepartureTime:  trip.DepartureTime,

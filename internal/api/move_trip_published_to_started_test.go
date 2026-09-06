@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"io"
-	"job4j.ru/share-trip/configs"
-	"job4j.ru/share-trip/internal/api/dto"
+	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/api/testauth"
 	contractclient "job4j.ru/share-trip/internal/clients/contract"
 	"job4j.ru/share-trip/internal/domain"
@@ -20,21 +19,18 @@ import (
 )
 
 func TestServer_MoveTripPublishedToStarted(t *testing.T) {
+	t.Parallel()
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт no_active_contract - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonNoActiveContract}, nil)
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonNoActiveContract)}, nil)
 
-		// Подменяем глобальную фабрику на нашу мок-версию
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -53,7 +49,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -66,20 +62,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -91,7 +87,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -104,11 +100,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -119,7 +122,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -134,21 +137,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonNoActiveContract)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonNoActiveContract))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт terminated - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonContractTerminated}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonContractTerminated)}, nil)
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -167,7 +167,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -180,20 +180,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -205,7 +205,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -218,11 +218,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -233,7 +240,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -248,21 +255,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonContractTerminated)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonContractTerminated))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт not started - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonContractNotStarted}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonContractNotStarted)}, nil)
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -281,7 +285,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -294,20 +298,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -319,7 +323,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -332,11 +336,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -347,7 +358,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -362,21 +373,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonContractNotStarted)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonContractNotStarted))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт contract_expired - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonContractExpired}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonContractExpired)}, nil)
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -395,7 +403,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -408,20 +416,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -433,7 +441,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -446,11 +454,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -461,7 +476,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -476,21 +491,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonContractExpired)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonContractExpired))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт service_not_in_contract - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonServiceNotInContract}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonServiceNotInContract)}, nil)
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -509,7 +521,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -522,20 +534,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -547,7 +559,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -560,11 +572,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -575,7 +594,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -590,21 +609,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonServiceNotInContract)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonServiceNotInContract))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', контракт service_disabled - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
-			Return(contractclient.CheckResult{Allowed: false, Reason: dto.ReasonServiceDisabled}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
+			Return(contractclient.CheckResult{Allowed: false, Reason: string(api.ReasonServiceDisabled)}, nil)
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -623,7 +639,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -636,20 +652,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -661,7 +677,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -674,11 +690,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -689,7 +712,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -704,20 +727,17 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		require.Equal(t,
 			string(respBody),
-			domain.ErrNotAllowedToStart.Error()+dto.ReasonServiceDisabled)
+			domain.ErrNotAllowedToStart.Error()+string(api.ReasonServiceDisabled))
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published' - success", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
 			Return(contractclient.CheckResult{Allowed: true, Reason: ""}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		app := newTestAppWithContractClient(mockClient)
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -736,7 +756,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -749,20 +769,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -774,7 +794,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -787,11 +807,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -802,7 +829,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -814,23 +841,21 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		err = json.Unmarshal(respBody, &gotResp)
+		var gotRespStart api.MoveTripPublishToStartResponse
+		err = json.Unmarshal(respBody, &gotRespStart)
 		require.NoError(t, err)
-		requireEqualStartededTrip(t, got, gotResp)
+		requireEqualStartededTrip(t, gotRespStart, got)
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Started' - success, not content", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
 			Return(contractclient.CheckResult{Allowed: true, Reason: ""}, nil)
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -849,7 +874,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -862,20 +887,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -887,7 +912,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -900,11 +925,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -915,7 +947,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -927,12 +959,13 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		err = json.Unmarshal(respBody, &gotResp)
+		var gotRespStart api.MoveTripPublishToStartResponse
+		err = json.Unmarshal(respBody, &gotRespStart)
 		require.NoError(t, err)
-		requireEqualStartededTrip(t, got, gotResp)
+		requireEqualStartededTrip(t, gotRespStart, got)
 
 		// повторно отправляем на Started
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -948,18 +981,15 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 			"")
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', Contract Service недоступен - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 		mockClient := new(mocks.Client)
-		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.start").
+		mockClient.On("CheckService", mock.Anything, mockDriverId, "trip.started").
 			Return(contractclient.CheckResult{}, errors.New("internal server error"))
-		oldFactory := contractclient.ClientFactory
-		defer func() { contractclient.ClientFactory = oldFactory }() // Возвращаем всё как было
-		contractclient.ClientFactory = func() contractclient.Client {
-			return mockClient
-		}
+		app := newTestAppWithContractClient(mockClient)
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -978,7 +1008,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -991,20 +1021,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -1016,7 +1046,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1029,11 +1059,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -1044,7 +1081,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1062,6 +1099,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 			"internal server error")
 	})
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', retry - service's avialable after 2 call, retry executes 1 times - success", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 
 		// Создаем фейковый внешний API (Contract Service)
@@ -1069,44 +1107,21 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		externalAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attempts++
 			if attempts == 1 {
-				/////
-				//w.Header().Set("Content-Type", "application/json")
-				/////
 				w.WriteHeader(http.StatusServiceUnavailable)
-				/////
-				//_, _ = w.Write([]byte(`{"allowed": false, "reason": "service unavailable"}`)) // ОБЯЗАТЕЛЬНО пишем тело
-				/////
 				return
 			}
-			/////
-			//fmt.Println("MOCK: Request received!")
-			/////
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"allowed": true, "reason": ""}`))
 		}))
 
 		defer externalAPI.Close()
-		// Сохраняем старую, чтобы вернуть
-		oldFactory := contractclient.ClientFactory
-		t.Cleanup(func() {
-			contractclient.ClientFactory = oldFactory
-		})
 
-		contractclient.ClientFactory = func() contractclient.Client {
-			cfgContract, err := configs.LoadContract()
-			if err != nil {
-				t.Fatalf("Критическая ошибка: %v", err)
-			}
-			if err := cfgContract.Validate(); err != nil {
-				t.Fatalf("Критическая ошибка: %v", err)
-			}
-			// Переопределяем только то, что нужно для теста
-			cfgContract.BaseUrl = externalAPI.URL
-			return contractclient.NewClient(cfgContract)
-		}
+		cfg := testContractCfg
+		cfg.BaseUrl = externalAPI.URL
+		app := newTestAppWithContractClient(contractclient.NewClient(cfg))
 
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -1125,7 +1140,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1138,20 +1153,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -1163,7 +1178,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1176,11 +1191,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -1191,7 +1213,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1205,13 +1227,13 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		err = json.Unmarshal(respBody, &gotResp)
+		var gotRespStart api.MoveTripPublishToStartResponse
+		err = json.Unmarshal(respBody, &gotRespStart)
 		require.NoError(t, err)
-		requireEqualStartededTrip(t, got, gotResp)
-
+		requireEqualStartededTrip(t, gotRespStart, got)
 	})
-
 	t.Run("Перевод поездки в статус 'Started' - from 'Published', retry - service's avialable after 3 call, but retyr executes only 2 times - fail", func(t *testing.T) {
+		t.Parallel()
 		mockDriverId := uuid.NewString()
 
 		attempts := 0
@@ -1227,26 +1249,12 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		defer externalAPI.Close()
 
-		oldFactory := contractclient.ClientFactory // Сохраняем старую, чтобы вернуть
-		t.Cleanup(func() {
-			contractclient.ClientFactory = oldFactory
-		})
+		cfg := testContractCfg
+		cfg.BaseUrl = externalAPI.URL
+		app := newTestAppWithContractClient(contractclient.NewClient(cfg))
 
-		contractclient.ClientFactory = func() contractclient.Client {
-			cfgContract, err := configs.LoadContract()
-			if err != nil {
-				t.Fatalf("Критическая ошибка: %v", err)
-			}
-			if err := cfgContract.Validate(); err != nil {
-				t.Fatalf("Критическая ошибка: %v", err)
-			}
-			// Переопределяем только то, что нужно для теста
-			cfgContract.BaseUrl = externalAPI.URL
-			return contractclient.NewClient(cfgContract)
-		}
-
-		payload := dto.UpdateTripRequest{
-			DriverId:       mockDriverId,
+		payload := api.CreateTripRequest{
+			DriverID:       mockDriverId,
 			FromPoint:      "Дубаи",
 			ToPoint:        "Екатеринбург",
 			DepartureTime:  "2027-01-02 15:04:00",
@@ -1265,7 +1273,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err := testApp.Test(req, -1)
+		resp, err := app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1278,20 +1286,20 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var got dto.Trip
+		var got api.CreateTripResponse
 		err = json.Unmarshal(respBody, &got)
 		require.NoError(t, err)
 
 		requireEqualCreatedDraftTrip(t, got, payload)
 
-		tripID := got.ID
-		driverId := got.DriverId
-		payload = dto.UpdateTripRequest{
+		tripID := got.Trip.ID
+		driverId := got.Trip.DriverID
+		payloadPublish := api.MoveTripDraftToPublishRequest{
 			TripID:   tripID,
 			ClientID: driverId,
 		}
 
-		body, err = json.Marshal(payload)
+		body, err = json.Marshal(payloadPublish)
 		require.NoError(t, err)
 
 		req, err = http.NewRequest(
@@ -1303,7 +1311,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1316,11 +1324,18 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		respBody, err = io.ReadAll(resp.Body)
 		require.NoError(t, err)
 
-		var gotResp dto.Trip
+		var gotResp api.MoveTripDraftToPublishResponse
 		err = json.Unmarshal(respBody, &gotResp)
 		require.NoError(t, err)
-		requireEqualPublishedTrip(t, got, gotResp)
+		requireEqualPublishedTrip(t, gotResp, got)
 
+		payloadStart := api.MoveTripPublishToStartRequest{
+			TripID:   tripID,
+			ClientID: driverId,
+		}
+
+		body, err = json.Marshal(payloadStart)
+		require.NoError(t, err)
 		// перевод поездки в статус "started"
 		req, err = http.NewRequest(
 			http.MethodPut,
@@ -1331,7 +1346,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		testauth.WithAuth(req)
 
-		resp, err = testApp.Test(req, -1)
+		resp, err = app.Test(req, -1)
 		require.NoError(t, err)
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -1351,22 +1366,31 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 	})
 }
 
-func requireEqualStartededTrip(t *testing.T, created dto.Trip, got dto.Trip) {
+func requireEqualStartededTrip(t *testing.T, updated api.MoveTripPublishToStartResponse, got api.CreateTripResponse) {
 	t.Helper()
-	require.NotEmpty(t, got.ID)
-	require.NotEmpty(t, got.CreatedAt)
+	require.NotEmpty(t, updated.Trip.ID)
+	require.NotEmpty(t, updated.Trip.CreatedAt)
 
-	dateTimeFormat, err := dateToUserFormat(created.DepartureTime)
+	dateTimeFormat, err := dateToUserFormat(got.Trip.DepartureTime)
 	require.NoError(t, err)
 
-	require.Equal(t, dto.Trip{
-		ID:             created.ID,
-		DriverId:       created.DriverId,
-		FromPoint:      created.FromPoint,
-		ToPoint:        created.ToPoint,
+	require.Equal(t, api.TripResponse{
+		ID:             updated.Trip.ID,
+		DriverID:       updated.Trip.DriverID,
+		FromPoint:      updated.Trip.FromPoint,
+		ToPoint:        updated.Trip.ToPoint,
+		DepartureTime:  updated.Trip.DepartureTime,
+		AvailableSeats: updated.Trip.AvailableSeats,
+		Status:         updated.Trip.Status,
+		CreatedAt:      got.Trip.CreatedAt,
+	}, api.TripResponse{
+		ID:             got.Trip.ID,
+		DriverID:       got.Trip.DriverID,
+		FromPoint:      got.Trip.FromPoint,
+		ToPoint:        got.Trip.ToPoint,
 		DepartureTime:  dateTimeFormat,
-		AvailableSeats: created.AvailableSeats,
-		Status:         dto.TripStatusStarted,
-		CreatedAt:      got.CreatedAt,
-	}, got)
+		AvailableSeats: got.Trip.AvailableSeats,
+		Status:         string(api.StatusStarted),
+		CreatedAt:      got.Trip.CreatedAt,
+	})
 }

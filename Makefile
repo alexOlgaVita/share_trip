@@ -14,29 +14,28 @@ BIN_DIR := bin
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  test        - Run all tests"
-	@echo "  coverage    - Run tests and generate HTML coverage report"
+	@echo "  test        - Run all *_test.go with module coverage (same as stand)"
+	@echo "  coverage    - Run tests, print total, generate HTML coverage report"
 	@echo "  cover       - Alias for coverage"
 	@echo "  lint        - Run golangci-lint"
 	@echo "  all         - Run lint, tests and coverage"
 	@echo "  help        - Show this help"
 
-# Запуск всех тестов
+# Как на стенде: все *_test.go, покрытие по всему модулю, итог total
 .PHONY: test
 test:
-	$(GO) test -v $(GO_PKG) -coverprofile=$(COVERAGE_PROFILE) $(GO_PKG)
+	$(GO) test -v -coverpkg=$(GO_PKG) -coverprofile=$(COVERAGE_PROFILE) $(GO_PKG)
+	$(GO) tool cover -func=$(COVERAGE_PROFILE)
 
-# Генерация отчёта о покрытии в формате HTML
+# HTML-отчёт по уже собранному coverage.out (тесты гоняются в test)
 .PHONY: coverage cover
-coverage cover:
-	$(GO) test -coverprofile=$(COVERAGE_PROFILE) $(GO_PKG)
+coverage cover: test
 	$(GO) tool cover -html=$(COVERAGE_PROFILE) -o coverage.html
-	@echo "Coverage report generated: %cd%\coverage.html"
+	@echo Coverage report generated: coverage.html
 
-# Вывод покрытия в терминал (опционально)
 .PHONY: cover-report
 cover-report:
-	$(GO) test -cover $(GO_PKG)
+	$(GO) test -cover -coverpkg=$(GO_PKG) $(GO_PKG)
 
 # Запуск всех тестов
 .PHONY: fmt
@@ -86,9 +85,9 @@ up:
 down:
 	docker-compose down --volumes
 
-# Запуск всех проверок
+# Запуск всех проверок (тесты один раз: цель coverage зависит от test)
 .PHONY: check
-check: fmt lint test coverage
+check: fmt lint coverage
 
 .PHONY: e2eCheck
 e2eCheck:

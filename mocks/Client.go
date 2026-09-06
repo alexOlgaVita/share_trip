@@ -49,7 +49,7 @@ func NewClient(t interface {
 	Cleanup(func())
 }) *Client {
 	mock := &Client{}
-	mock.Mock.Test(t)
+	mock.Test(t)
 
 	t.Cleanup(func() { mock.AssertExpectations(t) })
 

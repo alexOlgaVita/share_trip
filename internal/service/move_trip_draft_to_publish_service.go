@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/domain"
 	events "job4j.ru/share-trip/internal/kafka"
 	"time"
@@ -17,9 +16,9 @@ import (
 
 func (s *TripService) MoveTripDraftToPublish(
 	ctx context.Context,
-	req dto.UpdateTripRequest,
+	req MoveTripDraftToPublishRequest,
 	brokerList []string,
-) (*dto.Trip, error) {
+) (MoveTripDraftToPublishResponse, error) {
 	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.MoveTripDraftToPublish")
 	defer span.End()
 
@@ -32,11 +31,8 @@ func (s *TripService) MoveTripDraftToPublish(
 			Observe(time.Since(started).Seconds())
 	}()
 
-	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*dto.Trip, error) {
-		resp, err := s.TripUsecase.MoveTripDraftToPublish(ctx, tx, dto.UpdateTripRequest{
-			TripID:   req.TripID,
-			ClientID: req.ClientID,
-		})
+	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*MoveTripDraftToPublishResponse, error) {
+		domainResp, err := s.TripUsecase.MoveTripDraftToPublish(ctx, tx, toDomainMoveTripDraftToPublishRequest(req))
 		if err != nil {
 			if errors.Is(err, domain.ErrTripNotFound) ||
 				errors.Is(err, domain.ErrClientNotDriver) ||
@@ -46,12 +42,13 @@ func (s *TripService) MoveTripDraftToPublish(
 			}
 			return nil, fmt.Errorf("usecase.MoveTripDraftToPublish: %w", err)
 		}
+		serviceResp := fromDomainMoveTripDraftToPublishResponse(domainResp)
 
 		event := events.TripPublished{
 			EventID:    uuid.NewString(),
 			EventType:  "trip_published",
 			TripID:     req.TripID,
-			DriverID:   req.DriverId, //пока один и тот же, что и ClientID
+			DriverID:   req.ClientID, //пока один и тот же, что и ClientID
 			CompanyID:  req.ClientID, //пока один и тот же, что и ClientID
 			OccurredAt: time.Now(),   //time.Now().UTC(),
 		}
@@ -68,18 +65,18 @@ func (s *TripService) MoveTripDraftToPublish(
 		}()
 
 		// фиксация события в таблице уведомлений в рамках одной транзакции
-		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, dto.TripEventPublished, req.TripID)
+		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, string(TripPublished), serviceResp.ID)
 		if err != nil {
 			log.Errorw("adding event to outbox after usecase.MoveTripDraftToPublish", err)
 			return nil, fiber.NewError(fiber.StatusInternalServerError, "internal server error")
 		}
 
-		return resp, nil
+		return &serviceResp, nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed in transaction: %w", err)
+		return MoveTripDraftToPublishResponse{}, fmt.Errorf("failed in transaction: %w", err)
 	}
 
-	return res, nil
+	return *res, nil
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
 	"job4j.ru/share-trip/internal/domain"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/observability/metrics"
@@ -37,8 +36,8 @@ func NewTripService(
 
 func (s *TripService) CreateTrip(
 	ctx context.Context,
-	req dto.CreateTripRequest,
-) (*dto.Trip, error) {
+	req CreateTripRequest,
+) (CreateTripResponse, error) {
 	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.CreateTrip")
 	defer span.End()
 
@@ -54,25 +53,19 @@ func (s *TripService) CreateTrip(
 	logger := logctx.Logger(ctx).With(
 		slog.String("service", "TripService"),
 		slog.String("operation", "CreateTrip"),
-		slog.String("driverId", req.DriverId),
+		slog.String("driverId", req.DriverID),
 	)
 
 	logger.Info("create trip started")
 
-	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*dto.Trip, error) {
+	res, err := tx(ctx, s.Pool, func(tx pgx.Tx) (*CreateTripResponse, error) {
 		txLogger := logger.With(
 			slog.String("layer", "transaction"),
 		)
 
 		txLogger.Info("transaction started")
 
-		resp, err := s.TripUsecase.CreateTrip(ctx, tx, dto.CreateTripRequest{
-			DriverId:       req.DriverId,
-			FromPoint:      req.FromPoint,
-			ToPoint:        req.ToPoint,
-			DepartureTime:  req.DepartureTime,
-			AvailableSeats: req.AvailableSeats,
-		})
+		domainResp, err := s.TripUsecase.CreateTrip(ctx, tx, toDomainCreateTripRequest(req))
 		if err != nil {
 			txLogger.Error(
 				"create trip usecase failed",
@@ -80,12 +73,13 @@ func (s *TripService) CreateTrip(
 			)
 			return nil, fmt.Errorf("usecase.CreateTrip: %w", err)
 		}
+		serviceResp := fromDomainCreateTripResponse(domainResp)
 		txLogger.Info(
 			"transaction completed",
-			slog.String("trip_id", resp.ID),
+			slog.String("trip_id", serviceResp.ID),
 		)
 
-		return resp, nil
+		return &serviceResp, nil
 	})
 
 	if err != nil {
@@ -93,7 +87,7 @@ func (s *TripService) CreateTrip(
 			"create trip failed",
 			slog.Any("error", err),
 		)
-		return nil, fmt.Errorf("failed in transaction: %w", err)
+		return CreateTripResponse{}, fmt.Errorf("failed in transaction: %w", err)
 	}
 
 	logger.Info(
@@ -101,5 +95,5 @@ func (s *TripService) CreateTrip(
 		slog.String("trip_id", res.ID),
 	)
 
-	return res, nil
+	return *res, nil
 }

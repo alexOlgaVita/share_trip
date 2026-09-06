@@ -6,21 +6,22 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
+	contractclient "job4j.ru/share-trip/internal/clients/contract"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/repository"
 	"log/slog"
 )
 
 type TripUsecase struct {
-	TripRepo *repository.RepoPg
+	TripRepo       *repository.RepoPg
+	ContractClient contractclient.Client
 }
 
 func (u *TripUsecase) CreateTrip(
 	ctx context.Context,
 	tx pgx.Tx,
-	req dto.CreateTripRequest,
-) (*dto.Trip, error) {
+	req CreateTripRequest,
+) (CreateTripResponse, error) {
 	tracer := otel.Tracer("TripUsecase")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.CreateTrip")
@@ -29,33 +30,30 @@ func (u *TripUsecase) CreateTrip(
 	logger := logctx.Logger(ctx).With(
 		slog.String("layer", "usecase"),
 		slog.String("usecase", "TripUsecase.CreateTrip"),
-		slog.String("client_id", req.DriverId),
+		slog.String("client_id", req.DriverID),
 	)
 
 	logger.Info("create trip usecase started")
 
-	id := uuid.NewString()
-	trip, err := u.TripRepo.Create(ctx, dto.Trip{
-		ID:             id,
-		DriverId:       req.DriverId,
-		FromPoint:      req.FromPoint,
-		ToPoint:        req.ToPoint,
-		DepartureTime:  req.DepartureTime,
-		AvailableSeats: req.AvailableSeats,
-		Status:         dto.TripStatusDraft,
-	})
+	req.ID = uuid.NewString()
+	req.Status = StatusDraft
+
+	repoReq := toRepositoryCreateTripRequest(req)
+	tripResp, err := u.TripRepo.Create(ctx, repoReq)
 	if err != nil {
 		logger.Error(
 			"repository create trip failed",
 			slog.Any("error", err),
 		)
-		return nil, fmt.Errorf("repoTrip.Create: %w", err)
+		return CreateTripResponse{}, fmt.Errorf("repoTrip.Create: %w", err)
 	}
+
+	domainTripResp := fromRepositoryCreateTripResponse(*tripResp)
 
 	logger.Info(
 		"create trip usecase completed",
-		slog.String("trip_id", trip.ID),
+		slog.String("trip_id", domainTripResp.ID),
 	)
 
-	return trip, nil
+	return domainTripResp, nil
 }

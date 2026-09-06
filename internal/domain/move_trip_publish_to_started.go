@@ -5,51 +5,60 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
-	"job4j.ru/share-trip/internal/api/dto"
-	contractclient "job4j.ru/share-trip/internal/clients/contract"
 )
 
 func (u *TripUsecase) MoveTripPublishedToStarted(
 	ctx context.Context,
 	tx pgx.Tx,
-	req dto.UpdateTripRequest,
-) (*dto.Trip, error) {
+	req MoveTripPublishToStartRequest,
+) (MoveTripPublishToStartResponse, error) {
 	tracer := otel.Tracer("TripUsecase")
 
 	ctx, span := tracer.Start(ctx, "TripUsecase.MoveTripPublishedToStarted")
 	defer span.End()
 
-	trip, err := u.TripRepo.GetForUpdateByID(ctx, tx, req.TripID)
+	repoReq := toRepositoryMoveTripPublishToStartRequest(req)
+	trip, err := u.TripRepo.GetForUpdateByID(ctx, tx, repoReq.ID)
 	if err != nil {
-		return nil, err
+		return MoveTripPublishToStartResponse{}, err
 	}
 
-	if trip.DriverId != req.ClientID {
-		return nil, ErrClientNotDriver
+	if trip.DriverID != repoReq.DriverID {
+		return MoveTripPublishToStartResponse{}, ErrClientNotDriver
 	}
 
-	if trip.Status == dto.TripStatusStarted {
-		return trip, ErrStatusIsStartedAlready
+	if trip.Status == string(StatusStarted) {
+		return MoveTripPublishToStartResponse{
+				ID:             trip.ID,
+				DriverID:       trip.DriverID,
+				FromPoint:      trip.FromPoint,
+				ToPoint:        trip.ToPoint,
+				DepartureTime:  trip.DepartureTime,
+				AvailableSeats: trip.AvailableSeats,
+				Status:         trip.Status,
+				CreatedAt:      trip.CreatedAt,
+			},
+			ErrStatusIsStartedAlready
 	}
 
-	if trip.Status != dto.TripStatusPublished {
-		return nil, ErrNotAllowedCurrentStatusToStarted
+	if trip.Status != string(StatusPublished) {
+		return MoveTripPublishToStartResponse{}, ErrNotAllowedCurrentStatusToStarted
 	}
 
-	client := contractclient.ClientFactory()
-	checkResult, err := client.CheckService(ctx, req.ClientID, "trip.start")
+	checkResult, err := u.ContractClient.CheckService(ctx, req.ClientID, string(ServiceStarted))
 	if err != nil {
-		return nil, err
+		return MoveTripPublishToStartResponse{}, err
 	}
 	if !checkResult.Allowed {
-		return nil, errors.New(ErrNotAllowedToStart.Error() + checkResult.Reason)
+		return MoveTripPublishToStartResponse{}, errors.New(ErrNotAllowedToStart.Error() + checkResult.Reason)
 	}
 
-	err = u.TripRepo.UpdateStatus(ctx, tx, trip.ID, trip.Status, dto.TripStatusStarted)
+	tripResp, err := u.TripRepo.MoveTripPublishToStarted(ctx, tx, trip.ID, string(StatusStarted))
 	if err != nil {
-		return nil, err
+		return MoveTripPublishToStartResponse{}, err
 	}
-	trip.Status = dto.TripStatusStarted
+	domainTripResp := fromRepositoryMoveTripPublishToStartResponse(tripResp)
+	//trip.Status = api.TripStatusStarted
 
-	return trip, nil
+	return domainTripResp, nil
 }
