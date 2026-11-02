@@ -9,8 +9,21 @@ DOCKER_NAME := pg
 BINARY_NAME := sharetrip.exe
 MAIN_PKG := ./cmd/sharetrip
 BIN_DIR := bin
+OAPI_CODEGEN_VERSION := v2.8.0
+CONTRACT_OPENAPI_URL := http://localhost:8082/api/contract.yaml
+CONTRACT_CLIENT_DIR := internal/clients/contract
 
 # Цель по умолчанию
+
+.PHONY: generate-contract-client
+generate-contract-client:
+	if not exist "$(CONTRACT_CLIENT_DIR)/gen" mkdir "$(CONTRACT_CLIENT_DIR)/gen"
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) \
+		-generate types,client \
+		-package contractgen \
+		-o $(CONTRACT_CLIENT_DIR)/gen/client.gen.go \
+		$(CONTRACT_OPENAPI_URL)
+
 .PHONY: help
 help:
 	@echo "Available targets:"

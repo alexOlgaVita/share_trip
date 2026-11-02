@@ -98,9 +98,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	client, err := contractclient.NewClient(cfgContract)
+
+	if err != nil {
+		log.Fatalf("failed to create contract client: %v", err)
+	}
+
 	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
 		TripRepo:       repo,
-		ContractClient: contractclient.NewClient(cfgContract),
+		ContractClient: client,
 	})
 
 	cfgKafka, err := configs.LoadKafkaConf()

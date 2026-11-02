@@ -39,7 +39,7 @@ func (u *TripUsecase) CreateTrip(
 	req.Status = StatusDraft
 
 	repoReq := toRepositoryCreateTripRequest(req)
-	tripResp, err := u.TripRepo.Create(ctx, repoReq)
+	tripResp, err := u.TripRepo.Create(ctx, tx, repoReq)
 	if err != nil {
 		logger.Error(
 			"repository create trip failed",

@@ -24,7 +24,7 @@ func NewRepoPg(metrics *metrics.Metrics, pool *pgxpool.Pool) *RepoPg {
 	return &RepoPg{metrics: metrics, pool: pool}
 }
 
-func (r *RepoPg) Create(ctx context.Context, it CreateTripRequest) (*CreateTripResponse, error) {
+func (r *RepoPg) Create(ctx context.Context, tx pgx.Tx, it CreateTripRequest) (*CreateTripResponse, error) {
 	tracer := otel.Tracer("TripRepository")
 
 	ctx, span := tracer.Start(ctx, "TripRepository.Create")
@@ -57,17 +57,17 @@ func (r *RepoPg) Create(ctx context.Context, it CreateTripRequest) (*CreateTripR
 	logger.Info("insert trip started")
 
 	// запись в основную таблицу
-	_, err := r.pool.Exec(
+	_, err := tx.Exec(
 		ctx,
 		`insert into trips(id, driver_id, from_point, to_point, departure_time, seats, status) values($1, $2, $3, $4, $5, $6, $7)`,
 		it.ID, it.DriverID, it.FromPoint, it.ToPoint, it.DepartureTime, it.AvailableSeats, it.Status,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("r.pool.Exec: %w", err)
+		return nil, fmt.Errorf("tx.Exec: %w", err)
 	}
 	// запись в историческую таблицу
 	id := uuid.New().String()
-	_, err = r.pool.Exec(
+	_, err = tx.Exec(
 		ctx,
 		`insert into trip_history(id, trip_id, to_status) values($1, $2, $3)`,
 		id, it.ID, it.Status,
@@ -243,7 +243,7 @@ func (r *RepoPg) UpdateStatus(ctx context.Context, tx pgx.Tx, id string, oldStat
 	if err != nil {
 		return nil, fmt.Errorf("r.pool.Exec (update): %w", err)
 	}
-	///////
+
 	// 2. Отражаем смену статуса в исторической таблице
 	idHist := uuid.New().String()
 	_, err = tx.Exec(ctx, "INSERT INTO trip_history(id, trip_id, from_status, to_status) values($1, $2, $3, $4)",

@@ -45,6 +45,12 @@ var (
 func TestMain(m *testing.M) {
 	testCtx = context.Background()
 
+	// Ryuk не может подключить именованные каналы (named pipes) Windows в контейнер Linux,
+	// из-за чего в Docker Desktop процесс reaper сразу завершается, а Postgres так и не запускается.
+	if err := os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true"); err != nil {
+		log.Fatalf("disable testcontainers reaper: %v", err)
+	}
+
 	var err error
 
 	testContainer, err = postgres.Run(

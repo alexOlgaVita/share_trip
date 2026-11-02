@@ -2,37 +2,41 @@ package contractclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	contractgen "job4j.ru/share-trip/internal/clients/contract/gen"
+	"net/http"
 )
 
 func (c *clientImpl) CheckService(ctx context.Context, companyID string, serviceCode string) (CheckResult, error) {
-	result := CheckResult{}
 
-	if c.http == nil {
-		return CheckResult{}, fmt.Errorf("resty client is not initialized")
+	companyIDUuid, err := uuid.Parse(companyID)
+	if err != nil {
+		return CheckResult{}, fmt.Errorf("invalid company ID: %w", err)
 	}
-	resp, err := c.http.R().
-		SetContext(ctx).
-		SetHeader("Content-Type", "application/json").
-		SetBody(checkServiceRequest{
-			CompanyID:   companyID,
-			ServiceCode: serviceCode,
-		}).
-		//SetResult(&result)- работает не корректно, поэтому ниже делаем отдельно Unmarshal
-		Post("/contracts/service-availability-checks")
+	resp, err := c.generated.CheckServiceAvailabilityWithResponse(ctx, contractgen.CheckServiceAvailabilityJSONRequestBody{
+		CompanyId:   companyIDUuid,
+		ServiceCode: serviceCode,
+	})
 	if err != nil {
 		return CheckResult{}, err
 	}
 
-	if resp.IsError() {
-		return CheckResult{}, mapHTTPError(resp)
+	if resp.StatusCode() != http.StatusOK {
+		return CheckResult{}, fmt.Errorf("api error: status code %d", resp.StatusCode())
 	}
 
-	// вместо SetResult в коде выше используем ручной разбор
-	err = json.Unmarshal(resp.Body(), &result)
-	if err != nil {
-		return CheckResult{}, fmt.Errorf("failed to decode response: %w", err)
+	if resp.JSON200 == nil {
+		return CheckResult{}, fmt.Errorf("api returned 200 but body is empty")
 	}
+
+	result := CheckResult{
+		Allowed: resp.JSON200.Allowed,
+	}
+
+	if resp.JSON200.Reason != nil {
+		result.Reason = string(*resp.JSON200.Reason)
+	}
+
 	return result, nil
 }

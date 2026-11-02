@@ -1110,6 +1110,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"allowed": true, "reason": ""}`))
 		}))
@@ -1118,7 +1119,12 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		cfg := testContractCfg
 		cfg.BaseUrl = externalAPI.URL
-		app := newTestAppWithContractClient(contractclient.NewClient(cfg))
+
+		client, err := contractclient.NewClient(cfg)
+		if err != nil {
+			t.Fatalf("failed to create contract client: %v", err)
+		}
+		app := newTestAppWithContractClient(client)
 
 		payload := api.CreateTripRequest{
 			DriverID:       mockDriverId,
@@ -1243,6 +1249,7 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"allowed": true, "reason": ""}`))
 		}))
@@ -1251,7 +1258,12 @@ func TestServer_MoveTripPublishedToStarted(t *testing.T) {
 
 		cfg := testContractCfg
 		cfg.BaseUrl = externalAPI.URL
-		app := newTestAppWithContractClient(contractclient.NewClient(cfg))
+
+		client, err := contractclient.NewClient(cfg)
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+		app := newTestAppWithContractClient(client)
 
 		payload := api.CreateTripRequest{
 			DriverID:       mockDriverId,
