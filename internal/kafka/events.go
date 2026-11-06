@@ -17,6 +17,10 @@ type TripPublished struct {
 	OccurredAt time.Time `json:"occurred_at"`
 }
 
+type Publisher interface {
+	PublishTripPublished(ctx context.Context, event TripPublished) error
+}
+
 type Producer struct {
 	writer *kafka.Writer
 }

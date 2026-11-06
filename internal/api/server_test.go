@@ -23,7 +23,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/stretchr/testify/mock"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"job4j.ru/share-trip/mocks"
 
 	"job4j.ru/share-trip/internal/api"
 	"job4j.ru/share-trip/internal/service"
@@ -39,7 +41,7 @@ var (
 	testKcCfg       configs.Keycloak
 	testMockCfg     middleware.KeycloakConfig
 	testContractCfg configs.Contract
-	testKafkaCfg    configs.KafkaConf
+	testPublisher   *mocks.Publisher
 )
 
 func TestMain(m *testing.M) {
@@ -118,13 +120,8 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 
-	testKafkaCfg, err = configs.LoadKafkaConf()
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err := testKafkaCfg.Validate(); err != nil {
-		log.Fatal(err)
-	}
+	testPublisher = &mocks.Publisher{}
+	testPublisher.On("PublishTripPublished", mock.Anything, mock.Anything).Return(nil)
 
 	testApp = newTestAppWithContractClient(nil)
 
@@ -150,9 +147,9 @@ func newTestAppWithContractClient(client contractclient.Client) *fiber.App {
 	srv := service.NewTripService(testLogger, m, testPool, &domain.TripUsecase{
 		TripRepo:       repo,
 		ContractClient: client,
-	})
+	}, testPublisher)
 	app := fiber.New()
-	server := api.NewServer(app, registry, repo, srv, testKcCfg, testMockCfg, testContractCfg, testKafkaCfg)
+	server := api.NewServer(app, registry, repo, srv, testKcCfg, testMockCfg, testContractCfg)
 	server.Route(app)
 	return app
 }

@@ -10,6 +10,7 @@ import (
 	"job4j.ru/share-trip/internal/appl"
 	contractclient "job4j.ru/share-trip/internal/clients/contract"
 	"job4j.ru/share-trip/internal/domain"
+	events "job4j.ru/share-trip/internal/kafka"
 	"job4j.ru/share-trip/internal/middleware"
 	"job4j.ru/share-trip/internal/observability/metrics"
 	"job4j.ru/share-trip/internal/observability/tracing"
@@ -104,11 +105,6 @@ func main() {
 		log.Fatalf("failed to create contract client: %v", err)
 	}
 
-	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
-		TripRepo:       repo,
-		ContractClient: client,
-	})
-
 	cfgKafka, err := configs.LoadKafkaConf()
 	if err != nil {
 		log.Fatal(err)
@@ -116,8 +112,19 @@ func main() {
 	if err := cfgKafka.Validate(); err != nil {
 		log.Fatal(err)
 	}
+	publisher := events.NewProducer(cfgKafka.BrokerList, "trip.events")
+	defer func() {
+		if err := publisher.Close(); err != nil {
+			logger.Error("close kafka producer failed", "error", err)
+		}
+	}()
 
-	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{}, cfgContract, cfgKafka)
+	srv := service.NewTripService(logger, m, pool, &domain.TripUsecase{
+		TripRepo:       repo,
+		ContractClient: client,
+	}, publisher)
+
+	server := api.NewServer(app, registry, repo, srv, kcCfg, middleware.KeycloakConfig{}, cfgContract)
 	app.Use(middleware.NewHTTPMetricsMiddleware(m))
 
 	// Настройка роута

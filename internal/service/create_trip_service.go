@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"job4j.ru/share-trip/internal/domain"
+	events "job4j.ru/share-trip/internal/kafka"
 	"job4j.ru/share-trip/internal/observability/logctx"
 	"job4j.ru/share-trip/internal/observability/metrics"
 	"log/slog"
@@ -18,6 +19,7 @@ type TripService struct {
 	metrics     *metrics.Metrics
 	Pool        *pgxpool.Pool
 	TripUsecase *domain.TripUsecase
+	Publisher   events.Publisher
 }
 
 func NewTripService(
@@ -25,12 +27,14 @@ func NewTripService(
 	metrics *metrics.Metrics,
 	Pool *pgxpool.Pool,
 	TripUsecase *domain.TripUsecase,
+	publisher events.Publisher,
 ) *TripService {
 	return &TripService{
 		logger:      logger,
 		metrics:     metrics,
 		Pool:        Pool,
 		TripUsecase: TripUsecase,
+		Publisher:   publisher,
 	}
 }
 

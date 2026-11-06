@@ -12,6 +12,7 @@ BIN_DIR := bin
 OAPI_CODEGEN_VERSION := v2.8.0
 CONTRACT_OPENAPI_URL := http://localhost:8082/api/contract.yaml
 CONTRACT_CLIENT_DIR := internal/clients/contract
+MOCKGEN_VERSION := v0.6.0
 
 # Цель по умолчанию
 
@@ -105,3 +106,16 @@ check: fmt lint coverage
 .PHONY: e2eCheck
 e2eCheck:
 	curl http://localhost:8080/api/ready
+
+
+.PHONY: deps install-mockgen generate generate-mocks
+
+deps: install-mockgen
+
+install-mockgen:
+	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
+
+generate: generate-mocks
+
+generate-mocks: deps
+	go generate ./...

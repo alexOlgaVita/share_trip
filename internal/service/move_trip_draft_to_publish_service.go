@@ -17,7 +17,6 @@ import (
 func (s *TripService) MoveTripDraftToPublish(
 	ctx context.Context,
 	req MoveTripDraftToPublishRequest,
-	brokerList []string,
 ) (MoveTripDraftToPublishResponse, error) {
 	ctx, span := otel.Tracer("TripService").Start(ctx, "TripService.MoveTripDraftToPublish")
 	defer span.End()
@@ -52,17 +51,10 @@ func (s *TripService) MoveTripDraftToPublish(
 			CompanyID:  req.ClientID, //пока один и тот же, что и ClientID
 			OccurredAt: time.Now(),   //time.Now().UTC(),
 		}
-		producer := events.NewProducer(brokerList, "trip.events")
-		err = producer.PublishTripPublished(ctx, event)
+		err = s.Publisher.PublishTripPublished(ctx, event)
 		if err != nil {
 			return nil, fmt.Errorf("usecase.MoveTripDraftToPublish, sending event to kafka error: %w", err)
 		}
-
-		defer func() {
-			if err := producer.Close(); err != nil {
-				log.Errorf("failed to close kafka producer: %v", err)
-			}
-		}()
 
 		// фиксация события в таблице уведомлений в рамках одной транзакции
 		err = s.TripUsecase.TripRepo.CreateEvent(ctx, tx, string(TripPublished), serviceResp.ID)

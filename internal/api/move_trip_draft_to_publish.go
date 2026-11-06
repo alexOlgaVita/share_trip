@@ -32,7 +32,6 @@ func (s *Server) MoveTripDraftToPublish(c *fiber.Ctx) error {
 
 	var resp, err = s.TripService.MoveTripDraftToPublish(ctx,
 		toServiceMoveTripDraftToPublishRequest(req),
-		s.KafkaCfg.BrokerList,
 	)
 
 	if err != nil {
